@@ -1,0 +1,31 @@
+{
+  "session": "03",
+  "title": "ADB dumpsys batterystats Parser",
+  "model": "IBM Bob 2.0",
+  "timestamp": "2025-09-01T14:00:00Z",
+  "duration_minutes": 55,
+  "built": [
+    "src/parser/dumpsys.ts — full DumpsysResult parser",
+    "7 TypeScript interfaces: DumpsysResult, PerUidEntry, WakelockEntry, NetworkEntry, DozeViolation, CpuWakeup, DumpsysDelta",
+    "parseEstimatedPowerUse() — mAh per component extraction",
+    "parsePerUidData() — per-app CPU + wakelock time",
+    "parseWakelockHistory() — wakelock name, package, hold duration",
+    "parseNetworkStats() — bytes rx/tx per UID wifi vs mobile",
+    "parseDozeViolations() — Doze whitelist + idle exit detection",
+    "parseCpuWakeups() — wakeup alarm counts per package",
+    "computeDelta() — before/after subtraction, drain rate calculation"
+  ],
+  "bob_reasoning": "dumpsys batterystats output is semi-structured. Key insight: sections are identified by indented header lines, not by consistent delimiters. Each section parser uses line-by-line regex rather than a parser combinator. All parsing is defensive (try/catch per section) because real-world dumpsys output varies across Android versions (8 through 14). The computeDelta function uses a 3000mAh default battery capacity — conservative enough to avoid overestimating drain on modern devices.",
+  "files_created": ["src/parser/dumpsys.ts"],
+  "exports": [
+    "parseDumpsys",
+    "computeDelta",
+    "DumpsysResult",
+    "DumpsysDelta",
+    "PerUidEntry",
+    "WakelockEntry",
+    "NetworkEntry",
+    "DozeViolation",
+    "CpuWakeup"
+  ]
+}

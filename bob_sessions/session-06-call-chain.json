@@ -1,0 +1,27 @@
+{
+  "session": "06",
+  "title": "Causal Chain Tracing + Fix Station UI",
+  "model": "IBM Bob 2.0",
+  "timestamp": "2025-09-03T09:00:00Z",
+  "duration_minutes": 72,
+  "built": [
+    "src/main.ts — full app wiring: project open, analyze, finding click, ADB profiling, Settings modal",
+    "Intelligence Feed: real-time DOM-append stream showing Bob's reasoning per finding",
+    "Fix Station: finding detail card, causal chain tree (nested ul with CSS connectors), code diff block, copy button",
+    "Project Navigator: file tree with severity color dots, active file highlighting",
+    "ADB dynamic profiling: Start/Stop Profile buttons using tauri-plugin-shell with settings.adbPath",
+    "Grade badge real-time update as findings accumulate during scan",
+    "Export Report button wiring to report.html generation"
+  ],
+  "bob_reasoning": "The causal chain tree is rendered as nested <ul> elements with CSS ::before pseudo-elements drawing the connector lines — no SVG or canvas required. Each ChainNode from traceCallChain() becomes a <li> with class 'chain-root', 'chain-intermediate', or 'chain-symptom'. The Intelligence Feed uses DOM appendChild — not innerHTML reassignment — so each finding entry is appended without clearing previous entries. This preserves the 'streaming reasoning' feel as the analyzer runs.",
+  "files_created": [
+    "src/main.ts (full wiring)",
+    "src/ui/report.html"
+  ],
+  "key_decisions": [
+    "DOM-append for Intelligence Feed (no framework)",
+    "CSS connector lines for causal chain tree (no SVG)",
+    "ADB path read from settings at call time (not cached)",
+    "Report export via plugin-fs writeTextFile with injected JSON blob"
+  ]
+}
