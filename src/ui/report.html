@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EcoTrace — Energy Analysis Report</title>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d0d;
+      --surface:   #141414;
+      --surface2:  #1a1a1a;
+      --border:    #222222;
+      --text:      #e0e0e0;
+      --muted:     #888888;
+      --accent:    #00ff88;
+      --critical:  #ff4444;
+      --high:      #ff8800;
+      --medium:    #ffcc00;
+      --grade-aplus: #00ff88;
+      --grade-a:   #00cc66;
+      --grade-b:   #88ff00;
+      --grade-c:   #ffcc00;
+      --grade-d:   #ff8800;
+      --grade-f:   #ff2222;
+    }
+
+    html { font-size: 15px; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.6;
+      padding: 32px 16px 64px;
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* ── Typography helpers ───────────────────────────────────────── */
+    h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    code, pre {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: .85rem;
+    }
+
+    /* ── Divider ──────────────────────────────────────────────────── */
+    .section {
+      margin-top: 40px;
+    }
+
+    /* ── Demo banner ──────────────────────────────────────────────── */
+    .demo-banner {
+      background: #2a1a00;
+      border: 1px solid var(--high);
+      border-radius: 6px;
+      padding: 10px 16px;
+      color: var(--high);
+      font-size: .875rem;
+      margin-bottom: 28px;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left { flex: 1; min-width: 200px; }
+
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -.01em;
+      margin-bottom: 6px;
+    }
+
+    .meta-line {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .meta-path {
+      font-family: 'Consolas', 'Monaco', monospace;
+      color: var(--text);
+      font-size: .82rem;
+    }
+
+    .ibm-badge {
+      display: inline-block;
+      margin-top: 10px;
+      background: #1a1e2e;
+      border: 1px solid #3b5bdb;
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: .72rem;
+      color: #7c9fe4;
+      letter-spacing: .04em;
+    }
+
+    .grade-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100px;
+      height: 100px;
+      border-radius: 12px;
+      border: 2px solid currentColor;
+      flex-shrink: 0;
+    }
+
+    .grade-badge .letter {
+      font-size: 2.8rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .grade-badge .label {
+      font-size: .65rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      opacity: .75;
+      margin-top: 2px;
+    }
+
+    /* ── Summary cards ────────────────────────────────────────────── */
+    .summary-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    .stat-label {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat-sub {
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .findings-stat .c { color: var(--critical); }
+    .findings-stat .h { color: var(--high); }
+    .findings-stat .m { color: var(--medium); }
+
+    /* ── Grade breakdown table ────────────────────────────────────── */
+    .breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+
+    .breakdown-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .breakdown-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .breakdown-table tr:last-child td { border-bottom: none; }
+
+    .score-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .score-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width .3s;
+    }
+
+    .score-num {
+      font-size: .8rem;
+      color: var(--muted);
+      width: 36px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .weight-chip {
+      display: inline-block;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-size: .72rem;
+      color: var(--muted);
+    }
+
+    /* ── Findings list ────────────────────────────────────────────── */
+    .findings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    details.finding {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    details.finding[open] {
+      border-color: #333;
+    }
+
+    details.finding summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+
+    details.finding summary::-webkit-details-marker { display: none; }
+
+    details.finding summary::after {
+      content: '▸';
+      margin-left: auto;
+      color: var(--muted);
+      font-size: .8rem;
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+
+    details.finding[open] summary::after {
+      transform: rotate(90deg);
+    }
+
+    .sev-badge {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      flex-shrink: 0;
+    }
+
+    .sev-critical { background: #2a0a0a; color: var(--critical); border: 1px solid var(--critical); }
+    .sev-high     { background: #2a1500; color: var(--high);     border: 1px solid var(--high); }
+    .sev-medium   { background: #2a2000; color: var(--medium);   border: 1px solid var(--medium); }
+
+    .finding-title {
+      font-size: .9rem;
+      font-weight: 600;
+    }
+
+    .finding-pid {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: .75rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .finding-body {
+      padding: 0 16px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .finding-meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 10px 0 8px;
+      font-size: .78rem;
+      color: var(--muted);
+    }
+
+    .finding-meta .meta-key { margin-right: 4px; }
+
+    .finding-meta .meta-val {
+      font-family: 'Consolas', 'Monaco', monospace;
+      color: var(--text);
+    }
+
+    .snippet-block {
+      background: #0a0a0a;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 10px 14px;
+      margin: 6px 0;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .finding-desc {
+      font-size: .85rem;
+      color: #bbb;
+      margin-top: 8px;
+    }
+
+    .finding-hint {
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: 6px;
+      font-style: italic;
+    }
+
+    /* ── Causal chain ─────────────────────────────────────────────── */
+    .chain-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .chain-node {
+      display: flex;
+      gap: 0;
+    }
+
+    .chain-spine {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 32px;
+      flex-shrink: 0;
+    }
+
+    .chain-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--critical);
+      background: #2a0a0a;
+      flex-shrink: 0;
+      margin-top: 14px;
+    }
+
+    .chain-dot.root     { border-color: var(--critical); background: #3a0a0a; }
+    .chain-dot.intermed { border-color: var(--high);     background: #2a1500; }
+    .chain-dot.symptom  { border-color: var(--medium);   background: #2a2000; }
+
+    .chain-line {
+      flex: 1;
+      width: 2px;
+      background: var(--border);
+      margin: 0 auto;
+    }
+
+    .chain-card {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 6px 0 6px 12px;
+    }
+
+    .chain-role {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+    }
+
+    .role-root     { background: #2a0a0a; color: var(--critical); border: 1px solid var(--critical); }
+    .role-intermed { background: #2a1500; color: var(--high);     border: 1px solid var(--high); }
+    .role-symptom  { background: #2a2000; color: var(--medium);   border: 1px solid var(--medium); }
+
+    .chain-method {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .chain-loc {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: .75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .chain-desc {
+      font-size: .82rem;
+      color: #bbb;
+      margin-top: 6px;
+    }
+
+    /* ── Timeline table ───────────────────────────────────────────── */
+    .timeline-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+
+    .timeline-table th {
+      text-align: left;
+      padding: 8px 12px;
+      color: var(--muted);
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    .timeline-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .timeline-table tr:last-child td { border-bottom: none; }
+    .timeline-table tr.latest td { background: var(--surface2); }
+
+    .delta-up   { color: var(--accent); }
+    .delta-down { color: var(--critical); }
+    .delta-same { color: var(--muted); }
+
+    /* ── Footer ───────────────────────────────────────────────────── */
+    .footer {
+      margin-top: 56px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: .75rem;
+      color: var(--muted);
+    }
+
+    /* ── Print overrides ──────────────────────────────────────────── */
+    @media print {
+      :root {
+        --bg:       #ffffff;
+        --surface:  #f7f8fa;
+        --surface2: #f0f0f0;
+        --border:   #d0d0d0;
+        --text:     #1a1a1a;
+        --muted:    #555555;
+      }
+
+      body { background: #fff; color: #1a1a1a; padding: 0; }
+      .demo-banner { display: none; }
+
+      details.finding { break-inside: avoid; }
+      details.finding summary::after { display: none; }
+
+      .chain-card { break-inside: avoid; }
+    }
+
+    @media (max-width: 600px) {
+      .summary-bar { grid-template-columns: 1fr; }
+      .header { flex-direction: column; }
+      .grade-badge { width: 80px; height: 80px; }
+      .grade-badge .letter { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+
+<script id="scan-data" type="application/json"></script>
+
+<script>
+(function () {
+  /* ── Data bootstrap ──────────────────────────────────────────── */
+  const rawEl = document.getElementById('scan-data');
+  const rawText = rawEl ? (rawEl.textContent || '').trim() : '';
+  let scanData = null;
+  let isDemo = false;
+
+  try {
+    if (rawText) scanData = JSON.parse(rawText);
+  } catch (e) { /* fall through */ }
+
+  if (!scanData || !scanData.grade) {
+    isDemo = true;
+    scanData = {
+      projectPath: 'C:\\demo\\SampleAndroidApp',
+      timestamp: Date.now(),
+      grade: {
+        letter: 'B',
+        numericScore: 71,
+        drainScore: 78,
+        criticalScore: 70,
+        highScore: 60,
+        drainRateMahPerMin: 0.9,
+        criticalCount: 1,
+        highCount: 2,
+        mediumCount: 3
+      },
+      findings: [
+        {
+          patternId: 'W01',
+          patternName: 'Unclosed WakeLock',
+          severity: 'Critical',
+          category: 'WakeLock',
+          file: 'app/src/main/java/com/demo/BackgroundService.java',
+          line: 47,
+          snippet: '    mWakeLock.acquire(); // missing timeout / release',
+          description: 'A WakeLock is acquired but never released, keeping the CPU awake indefinitely and draining the battery.',
+          causalChainHint: 'Trace backwards from acquire() to see which lifecycle event triggers this path.'
+        },
+        {
+          patternId: 'N02',
+          patternName: 'Aggressive Poll Interval',
+          severity: 'High',
+          category: 'Network',
+          file: 'app/src/main/java/com/demo/SyncManager.java',
+          line: 112,
+          snippet: '    handler.postDelayed(syncRunnable, 5000); // 5 s polling',
+          description: 'Network polling every 5 seconds prevents the radio from entering low-power state. Use exponential back-off or a push-based mechanism.',
+          causalChainHint: 'Check what data is actually needed on each poll cycle.'
+        },
+        {
+          patternId: 'A01',
+          patternName: 'Animation Always Running',
+          severity: 'High',
+          category: 'Animation',
+          file: 'app/src/main/java/com/demo/SplashActivity.java',
+          line: 88,
+          snippet: '    animator.setRepeatCount(ValueAnimator.INFINITE);',
+          description: 'An infinite animator keeps the GPU active even when the UI is not visible. Pause animations in onStop().',
+          causalChainHint: 'Check lifecycle callbacks for animator.pause() / animator.cancel() calls.'
+        },
+        {
+          patternId: 'L01',
+          patternName: 'GPS Foreground Location',
+          severity: 'Medium',
+          category: 'Location',
+          file: 'app/src/main/java/com/demo/TrackingActivity.java',
+          line: 34,
+          snippet: '    locationManager.requestLocationUpdates(GPS_PROVIDER, 0, 0, listener);',
+          description: 'GPS updates requested at maximum frequency. Use NETWORK_PROVIDER or a lower update rate when high accuracy is not required.',
+          causalChainHint: 'Consider whether the feature requires GPS precision or NETWORK is sufficient.'
+        },
+        {
+          patternId: 'L03',
+          patternName: 'Fused Location Not Used',
+          severity: 'Medium',
+          category: 'Location',
+          file: 'app/src/main/java/com/demo/LocationHelper.java',
+          line: 21,
+          snippet: '    locationManager.requestLocationUpdates(GPS_PROVIDER, 1000, 10, cb);',
+          description: 'Direct LocationManager usage bypasses the fused provider\'s hardware-sharing optimisations.',
+          causalChainHint: 'Migrate to FusedLocationProviderClient for equivalent accuracy at lower cost.'
+        },
+        {
+          patternId: 'W03',
+          patternName: 'WakeLock Without Timeout',
+          severity: 'Medium',
+          category: 'WakeLock',
+          file: 'app/src/main/java/com/demo/UploadService.java',
+          line: 66,
+          snippet: '    wakeLock.acquire(); // no timeout parameter',
+          description: 'WakeLock.acquire() without a timeout is unsafe; a crash will leave the lock held until reboot.',
+          causalChainHint: 'Use acquire(timeoutMs) to ensure automatic release.'
+        }
+      ],
+      chain: [
+        {
+          file: 'app/src/main/java/com/demo/BackgroundService.java',
+          method: 'onCreate',
+          line: 22,
+          role: 'root',
+          description: 'Service is started; WakeLock instance is created here.'
+        },
+        {
+          file: 'app/src/main/java/com/demo/BackgroundService.java',
+          method: 'startDownload',
+          line: 38,
+          role: 'intermediate',
+          description: 'Download task dispatched to background thread; WakeLock acquired before dispatch.'
+        },
+        {
+          file: 'app/src/main/java/com/demo/BackgroundService.java',
+          method: 'onTaskComplete',
+          line: 47,
+          role: 'symptom',
+          description: 'Callback never calls mWakeLock.release() — lock is held indefinitely.'
+        }
+      ],
+      history: [
+        { timestamp: Date.now() - 7 * 86400000, grade: { letter: 'D', numericScore: 38 } },
+        { timestamp: Date.now() - 5 * 86400000, grade: { letter: 'C', numericScore: 54 } },
+        { timestamp: Date.now() - 3 * 86400000, grade: { letter: 'C', numericScore: 62 } },
+        { timestamp: Date.now() - 1 * 86400000, grade: { letter: 'B', numericScore: 68 } },
+        { timestamp: Date.now(),                 grade: { letter: 'B', numericScore: 71 } }
+      ]
+    };
+  }
+
+  /* ── Helpers ─────────────────────────────────────────────────── */
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatDate(ts) {
+    return new Date(ts).toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function formatDateShort(ts) {
+    return new Date(ts).toLocaleDateString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric'
+    });
+  }
+
+  function gradeColor(letter) {
+    const map = {
+      'A+': 'var(--grade-aplus)',
+      'A':  'var(--grade-a)',
+      'B':  'var(--grade-b)',
+      'C':  'var(--grade-c)',
+      'D':  'var(--grade-d)',
+      'F':  'var(--grade-f)'
+    };
+    return map[letter] || 'var(--muted)';
+  }
+
+  function sevClass(sev) {
+    return 'sev-' + sev.toLowerCase();
+  }
+
+  function sortFindings(findings) {
+    const order = { Critical: 0, High: 1, Medium: 2 };
+    return [...findings].sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+  }
+
+  /* ── Sections ────────────────────────────────────────────────── */
+  const g = scanData.grade;
+  const findings = sortFindings(scanData.findings || []);
+  const chain = scanData.chain || [];
+  const history = scanData.history || [];
+  const gColor = gradeColor(g.letter);
+
+  // 1. Demo banner
+  const demoBanner = isDemo
+    ? `<div class="demo-banner">⚠ Demo mode — no scan data injected</div>`
+    : '';
+
+  // 2. Header
+  const header = `
+<header class="header">
+  <div class="header-left">
+    <div class="logo">⚡ EcoTrace</div>
+    <div class="meta-line">Project: <span class="meta-path">${esc(scanData.projectPath)}</span></div>
+    <div class="meta-line">Scan date: ${formatDate(scanData.timestamp)}</div>
+    <div class="ibm-badge">Built with IBM Bob 2.0</div>
+  </div>
+  <div class="grade-badge" style="color:${gColor}">
+    <span class="letter">${esc(g.letter)}</span>
+    <span class="label">Grade</span>
+  </div>
+</header>`;
+
+  // 3. Summary bar
+  const summary = `
+<section class="summary-bar section">
+  <div class="stat-card">
+    <div class="stat-label">Drain Rate</div>
+    <div class="stat-value">${g.drainRateMahPerMin != null ? g.drainRateMahPerMin.toFixed(2) : '—'} <small style="font-size:.75rem;font-weight:400;color:var(--muted)">mAh/min</small></div>
+    <div class="stat-sub">Battery consumption rate</div>
+  </div>
+  <div class="stat-card findings-stat">
+    <div class="stat-label">Findings</div>
+    <div class="stat-value" style="font-size:1rem;line-height:1.8">
+      <span class="c">${g.criticalCount} Critical</span> &nbsp;
+      <span class="h">${g.highCount} High</span> &nbsp;
+      <span class="m">${g.mediumCount} Medium</span>
+    </div>
+    <div class="stat-sub">${findings.length} total issues detected</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Energy Score</div>
+    <div class="stat-value">${g.numericScore}<small style="font-size:.85rem;font-weight:400;color:var(--muted)">/100</small></div>
+    <div class="stat-sub">Composite weighted score</div>
+  </div>
+</section>`;
+
+  // 4. Grade breakdown
+  const drainScore    = g.drainScore    != null ? g.drainScore    : '—';
+  const criticalScore = g.criticalScore != null ? g.criticalScore : '—';
+  const highScore     = g.highScore     != null ? g.highScore     : '—';
+
+  function barRow(label, weight, subScore, subLabel) {
+    const pct = typeof subScore === 'number' ? subScore : 0;
+    const barColor = pct >= 70 ? 'var(--accent)' : pct >= 40 ? 'var(--medium)' : 'var(--critical)';
+    return `
+  <tr>
+    <td>${label}</td>
+    <td><span class="weight-chip">${weight}</span></td>
+    <td>
+      <div class="score-bar-wrap">
+        <div class="score-bar-bg"><div class="score-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        <span class="score-num">${subScore}</span>
+      </div>
+    </td>
+    <td style="font-size:.78rem;color:var(--muted)">${subLabel}</td>
+  </tr>`;
+  }
+
+  const breakdown = `
+<section class="section">
+  <h2>Grade Breakdown</h2>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+    <table class="breakdown-table">
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Weight</th>
+          <th>Sub-score</th>
+          <th>Basis</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${barRow('Drain Rate', '40%', drainScore, `${g.drainRateMahPerMin != null ? g.drainRateMahPerMin.toFixed(2) : '—'} mAh/min`)}
+        ${barRow('Critical Issues', '35%', criticalScore, `${g.criticalCount} critical finding${g.criticalCount !== 1 ? 's' : ''}`)}
+        ${barRow('High Issues', '25%', highScore, `${g.highCount} high finding${g.highCount !== 1 ? 's' : ''}`)}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" style="font-weight:700;color:var(--text)">Composite Score</td>
+          <td>
+            <div class="score-bar-wrap">
+              <div class="score-bar-bg"><div class="score-bar-fill" style="width:${g.numericScore}%;background:${gColor}"></div></div>
+              <span class="score-num" style="color:${gColor};font-weight:700">${g.numericScore}</span>
+            </div>
+          </td>
+          <td style="font-size:.78rem;color:${gColor};font-weight:700">Grade ${esc(g.letter)}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>`;
+
+  // 5. Findings list
+  function renderFinding(f) {
+    return `
+<details class="finding">
+  <summary>
+    <span class="sev-badge ${sevClass(f.severity)}">${esc(f.severity)}</span>
+    <span class="finding-pid">${esc(f.patternId)}</span>
+    <span class="finding-title">${esc(f.patternName)}</span>
+  </summary>
+  <div class="finding-body">
+    <div class="finding-meta">
+      <span><span class="meta-key">File:</span><span class="meta-val">${esc(f.file)}</span></span>
+      <span><span class="meta-key">Line:</span><span class="meta-val">${esc(f.line)}</span></span>
+      <span><span class="meta-key">Category:</span><span class="meta-val">${esc(f.category)}</span></span>
+    </div>
+    <pre class="snippet-block"><code>${esc(f.snippet)}</code></pre>
+    <p class="finding-desc">${esc(f.description)}</p>
+    ${f.causalChainHint ? `<p class="finding-hint">💡 ${esc(f.causalChainHint)}</p>` : ''}
+  </div>
+</details>`;
+  }
+
+  const findingsSection = `
+<section class="section">
+  <h2>Findings (${findings.length})</h2>
+  <div class="findings-list">
+    ${findings.map(renderFinding).join('\n')}
+  </div>
+</section>`;
+
+  // 6. Causal chain
+  let chainSection = '';
+  if (chain.length > 0) {
+    function roleClass(role) {
+      if (role === 'root')         return 'root';
+      if (role === 'intermediate') return 'intermed';
+      return 'symptom';
+    }
+    function roleBadgeClass(role) {
+      if (role === 'root')         return 'role-root';
+      if (role === 'intermediate') return 'role-intermed';
+      return 'role-symptom';
+    }
+    function roleLabel(role) {
+      if (role === 'root')         return 'Root Cause';
+      if (role === 'intermediate') return 'Intermediate';
+      return 'Symptom';
+    }
+
+    const nodes = chain.map((node, idx) => {
+      const isLast = idx === chain.length - 1;
+      return `
+<div class="chain-node">
+  <div class="chain-spine">
+    <div class="chain-dot ${roleClass(node.role)}"></div>
+    ${!isLast ? '<div class="chain-line"></div>' : ''}
+  </div>
+  <div class="chain-card">
+    <span class="chain-role ${roleBadgeClass(node.role)}">${roleLabel(node.role)}</span>
+    <div class="chain-method">${esc(node.method)}</div>
+    <div class="chain-loc">${esc(node.file)}:${esc(node.line)}</div>
+    <div class="chain-desc">${esc(node.description)}</div>
+  </div>
+</div>`;
+    }).join('');
+
+    chainSection = `
+<section class="section">
+  <h2>🔴 Critical Causal Chain</h2>
+  <div class="chain-container">
+    ${nodes}
+  </div>
+</section>`;
+  }
+
+  // 7. Timeline
+  let timelineSection = '';
+  if (history.length >= 2) {
+    // Sort newest-first for display
+    const sorted = [...history].sort((a, b) => b.timestamp - a.timestamp);
+
+    const rows = sorted.map((entry, idx) => {
+      const prev = sorted[idx + 1]; // older entry
+      let deltaHtml = '<span class="delta-same">→ —</span>';
+      if (prev) {
+        const delta = entry.grade.numericScore - prev.grade.numericScore;
+        if (delta > 0) {
+          deltaHtml = `<span class="delta-up">↑ +${delta}</span>`;
+        } else if (delta < 0) {
+          deltaHtml = `<span class="delta-down">↓ ${delta}</span>`;
+        } else {
+          deltaHtml = `<span class="delta-same">→ 0</span>`;
+        }
+      }
+      const isLatest = idx === 0;
+      const gc = gradeColor(entry.grade.letter);
+      return `
+<tr${isLatest ? ' class="latest"' : ''}>
+  <td>${formatDateShort(entry.timestamp)}${isLatest ? ' <span style="font-size:.7rem;color:var(--accent);margin-left:4px">Latest</span>' : ''}</td>
+  <td><strong style="color:${gc}">${esc(entry.grade.letter)}</strong></td>
+  <td>${entry.grade.numericScore}</td>
+  <td>${deltaHtml}</td>
+</tr>`;
+    }).join('');
+
+    timelineSection = `
+<section class="section">
+  <h2>Score Timeline</h2>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+    <table class="timeline-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Grade</th>
+          <th>Score</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+</section>`;
+  }
+
+  // 8. Footer
+  const footer = `
+<footer class="footer">
+  <div>Generated by EcoTrace &bull; IBM Bob 2.0 Hackathon</div>
+  <div style="margin-top:4px">Scan timestamp: ${formatDate(scanData.timestamp)}</div>
+</footer>`;
+
+  // ── Assemble ──────────────────────────────────────────────────
+  document.getElementById('root').innerHTML =
+    demoBanner +
+    header +
+    summary +
+    breakdown +
+    findingsSection +
+    chainSection +
+    timelineSection +
+    footer;
+
+  document.title = 'EcoTrace Report — ' + scanData.projectPath;
+})();
+</script>
+</body>
+</html>

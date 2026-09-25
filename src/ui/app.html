@@ -21,7 +21,7 @@
   <!-- ── 3-Panel content area ──────────────────────────────────── -->
   <div id="panels">
 
-    <!-- Panel 1: Project Navigator -->
+    <!-- ── Panel 1: Project Navigator ───────────────────────────── -->
     <div class="panel" id="panel-navigator">
       <div class="panel-header">
         <span class="panel-title">Project Navigator</span>
@@ -30,18 +30,19 @@
       <div class="panel-body" id="file-tree-body">
         <div class="file-tree-empty" id="file-tree-empty">
           Open an Android project to begin.<br><br>
-          Click <strong>Open Project</strong> above, then
+          Click <strong>Open Project</strong> above, then<br>
           <strong>Analyze</strong> to run all 23 detectors.
         </div>
         <div id="file-tree-list"></div>
       </div>
+      <!-- ADB profiling controls -->
       <div class="adb-controls">
         <button id="btn-start-profile">▶ Start Profile</button>
         <button id="btn-stop-profile" disabled>■ Stop</button>
       </div>
     </div>
 
-    <!-- Panel 2: Intelligence Feed -->
+    <!-- ── Panel 2: Intelligence Feed ───────────────────────────── -->
     <div class="panel" id="panel-feed">
       <div class="panel-header">
         <span class="panel-title">Intelligence Feed</span>
@@ -51,7 +52,7 @@
         <div id="intelligence-feed">
           <div class="feed-empty" id="feed-empty">
             <strong>IBM Bob 2.0</strong> reasoning will appear here in real time.<br><br>
-            Each finding is traced back through the call graph to its
+            Each finding is traced back through the call graph to its<br>
             architectural root cause across all files simultaneously.<br><br>
             <span style="color:#444;">No other tool can do this.</span>
           </div>
@@ -59,7 +60,7 @@
       </div>
     </div>
 
-    <!-- Panel 3: Fix Station -->
+    <!-- ── Panel 3: Fix Station ──────────────────────────────────── -->
     <div class="panel" id="panel-fix">
       <div class="panel-header">
         <span class="panel-title">Fix Station</span>
@@ -71,6 +72,8 @@
           • Causal chain from root cause to symptom<br>
           • Generated fix code ready to copy
         </div>
+
+        <!-- Finding detail card (hidden until a finding is selected) -->
         <div id="finding-detail" style="display:none;">
           <div class="finding-card">
             <div class="finding-card-header">
@@ -82,10 +85,14 @@
             <div class="finding-description" id="detail-description"></div>
             <pre class="finding-snippet" id="detail-snippet"></pre>
           </div>
+
+          <!-- Causal chain tree -->
           <div class="chain-section" id="chain-section">
             <div class="chain-section-title">🔴 Causal Chain</div>
             <ul class="chain-tree" id="chain-tree"></ul>
           </div>
+
+          <!-- Generated fix -->
           <div class="fix-section" id="fix-section">
             <div class="fix-section-header">
               <span class="fix-section-title">Generated Fix</span>
@@ -99,7 +106,7 @@
 
   </div><!-- /#panels -->
 
-  <!-- Vitals bar -->
+  <!-- ── Vitals bar (bottom) ───────────────────────────────────── -->
   <div id="vitals-bar">
     <div class="vitals-item">
       <span class="vitals-label">Grade</span>
@@ -128,10 +135,11 @@
 
 </div><!-- /#app -->
 
-<!-- Settings modal -->
+<!-- ── Settings modal ────────────────────────────────────────── -->
 <div id="settings-overlay">
   <div id="settings-modal">
     <h2><span class="icon">⚙</span> Settings</h2>
+
     <div class="settings-field">
       <label for="input-adb-path">ADB Executable Path</label>
       <input type="text" id="input-adb-path"
@@ -141,6 +149,7 @@
         Override with the full path if you get "adb not found" errors.
       </div>
     </div>
+
     <div class="settings-field">
       <label for="input-api-key">API Key (optional)</label>
       <div class="input-row">
@@ -153,6 +162,7 @@
         API integration coming in the next release.
       </div>
     </div>
+
     <div class="settings-actions">
       <button id="btn-settings-cancel">Cancel</button>
       <button id="btn-settings-save">Save</button>

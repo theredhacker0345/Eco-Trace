@@ -9,10 +9,12 @@
 
 ---
 
+> **Status:** Core build COMPLETE. All logic modules + UI built. Final polish phase remaining.
+
 ## How to Use This File
 
-Work through tasks **in order**. Each task is self-contained but feeds into the next.  
-Before starting any task, read the matching sub-task in [`ecotrace-plan.md`](ecotrace-plan.md) — it has the full intent, expected outcomes, and relevant context.  
+Work through tasks **in order**. Each task is self-contained but feeds into the next.
+Before starting any task, read the matching sub-task in [`ecotrace-plan.md`](ecotrace-plan.md) — it has the full intent, expected outcomes, and relevant context.
 When you finish a task here, mark it `[x]` and also update the **Status** in the plan file to `[x] done`.
 
 Use **Bob (IBM Bob 2.0)** to implement. Switch to Agent mode for all coding tasks.
@@ -31,112 +33,62 @@ Use **Bob (IBM Bob 2.0)** to implement. Switch to Agent mode for all coding task
 
 ## Phase 1 — Project Foundation
 
-### Task 1.1 — Tauri 2.0 Scaffold *(Sub-Task 1 in plan)*
-- [ ] Create `package.json` with all deps: `@tauri-apps/api`, `@tauri-apps/plugin-fs`, `@tauri-apps/plugin-shell`, `@tauri-apps/plugin-dialog`, vite, typescript
-- [ ] Create `tsconfig.json` (strict ESNext)
-- [ ] Create `vite.config.ts`
-- [ ] Create `index.html` (Tauri entry point)
-- [ ] Create `src-tauri/Cargo.toml` with `tauri 2.0`, `tauri-plugin-fs`, `tauri-plugin-shell`, `tauri-plugin-dialog`
-- [ ] Create `src-tauri/tauri.conf.json` (Tauri 2.0 schema: `"app".identifier`, `"app".windows`, `"build".frontendDist`)
-- [ ] Create `src-tauri/build.rs`
-- [ ] Create `src-tauri/src/main.rs` — register fs + shell + dialog plugins; implement `read_file` and `walk_dir` Rust commands
-- [ ] Create `src-tauri/capabilities/default.json` — permissions: `fs:allow-read-text-file`, `fs:allow-read-dir`, `fs:allow-write-text-file`, `shell:allow-execute`, `path:allow-app-data-dir`, `dialog:allow-open`
-- [ ] Create `src/main.ts` (empty entry for now)
-- [ ] **Verify:** `npm install` completes. `cargo tauri build` compiles without errors.
+### Task 1.1 — Tauri 2.0 Scaffold ✅ DONE
+- [x] `package.json`, `tsconfig.json`, `vite.config.ts`, `index.html`
+- [x] `src-tauri/Cargo.toml`, `tauri.conf.json`, `build.rs`, `src/lib.rs`, `src/main.rs`
+- [x] `src-tauri/capabilities/default.json` (correct Tauri 2.0 permission names)
+- [x] `.cargo/config.toml` — CARGO_TARGET_DIR=C:/ecotrace_target (windres space-path fix)
+- [x] Icons generated via `tauri icon`
+- [x] **Verified:** `npm install` ✓. `cargo tauri build` → `ecotrace.exe` ✓
 
 ---
 
-## Phase 2 — Core Logic Modules
+## Phase 2 — Core Logic Modules ✅ ALL DONE
 
-### Task 2.1 — ADB Output Parser *(Sub-Task 3 in plan)*
-- [ ] Create `src/parser/dumpsys.ts`
-- [ ] Define interfaces: `DumpsysResult`, `PerUidEntry`, `WakelockEntry`, `NetworkEntry`, `DozeViolation`, `CpuWakeup`, `DumpsysDelta`
-- [ ] Implement section splitter (raw string → labeled sections)
-- [ ] Implement `parseEstimatedPowerUse()` — mAh per component
-- [ ] Implement `parsePerUidData()` — per-app CPU time + wakelock duration
-- [ ] Implement `parseWakelockHistory()` — wakelock name, package, hold duration
-- [ ] Implement `parseNetworkStats()` — bytes rx/tx per UID
-- [ ] Implement `parseDozeViolations()` — idle mode exits
-- [ ] Implement `parseCpuWakeups()` — wakeup alarms per package per hour
-- [ ] Implement `computeDelta(before, after)` — drain rate = mAh delta / elapsed minutes
-- [ ] Export `parseDumpsys(raw: string): DumpsysResult` as the public API
+### Task 2.1 — ADB Output Parser ✅ DONE
+- [x] `src/parser/dumpsys.ts` — 7 interfaces + 8 parsers + `computeDelta()`
 
-### Task 2.2 — 23-Pattern Static Analyzer *(Sub-Task 4 in plan)*
-> Read `.bob/rules-agent/energy.md` first — all 23 patterns with Java + Kotlin detection signals are defined there.
-- [ ] Create `src/analyzer/static.ts`
-- [ ] Define interfaces: `FileContent`, `Finding`, `CallGraph`, `CallEdge`, `ChainNode`
-- [ ] Define `Severity` and `Category` enums
-- [ ] Implement Wakefulness detectors W01–W06 (Java + Kotlin regex for each)
-- [ ] Implement Network detectors N01–N06 (Java + Kotlin regex for each)
-- [ ] Implement Location & Sensor detectors L01–L05 (Java + Kotlin regex for each)
-- [ ] Implement Lifecycle & Architecture detectors A01–A06 (Java + Kotlin regex for each)
-- [ ] Implement `buildCallGraph(files)` — method definitions + call site adjacency map
-- [ ] Implement `analyzeProject(files)` — run all 23 detectors; return `Finding[]`
-- [ ] Implement `traceCallChain(finding, callGraph)` — walk back 6 hops max
+### Task 2.2 — 23-Pattern Static Analyzer ✅ DONE
+- [x] `src/analyzer/static.ts` — all 23 patterns (Java + Kotlin), `buildCallGraph()`, `traceCallChain()`
 
-### Task 2.3 — Settings Store *(Sub-Task 4b in plan)*
-- [ ] Create `src/settings.ts`
-- [ ] Define `AppSettings` interface: `{ adbPath: string; apiKey: string }`
-- [ ] Implement `loadSettings(): Promise<AppSettings>` — reads `%APPDATA%\ecotrace\settings.json`; returns defaults if missing
-- [ ] Implement `saveSettings(s): Promise<void>` — writes JSON to settings.json
-- [ ] Export `getDefaultSettings()` returning `{ adbPath: "adb", apiKey: "" }`
+### Task 2.3 — Settings Store ✅ DONE
+- [x] `src/settings.ts` — `loadSettings()`, `saveSettings()`, `AppSettings`
 
-### Task 2.4 — Grading Engine + Timeline Storage *(Sub-Task 5 in plan)*
-- [ ] Create `src/grader/grade.ts`
-- [ ] Define interfaces: `GradeResult`, `ScanRecord`, `ProgressPoint`
-- [ ] Implement `scoreDrainRate()`, `scoreCriticalCount()`, `scoreHighCount()` (0–100 sub-scores)
-- [ ] Implement `calculateGrade(findings, delta)` — weighted formula (40/35/25), letter grade A+ to F
-- [ ] Hard threshold: drain ≥ 3.0 mAh/min OR ≥ 5 critical = F regardless of score
-- [ ] Implement `saveScan()` — appends to `%APPDATA%\ecotrace\history.json`
-- [ ] Implement `loadHistory()` — returns sorted array (newest first); empty array if file missing
-- [ ] Implement `computeScoreProgress()` — per-scan score deltas for timeline sparkline
+### Task 2.4 — Grading Engine ✅ DONE
+- [x] `src/grader/grade.ts` — `calculateGrade()`, `saveScan()`, `loadHistory()`, `computeScoreProgress()`
 
 ---
 
-## Phase 3 — User Interface
+## Phase 3 — User Interface ✅ ALL DONE
 
-### Task 3.1 — CSS Design System + 3-Panel Layout *(Sub-Task 6 in plan)*
-- [ ] Create `src/ui/styles.css`
-  - CSS variables: `--bg: #0d0d0d`, `--accent: #00ff88`, severity colors
-  - `.panel` grid: `240px | 1fr | 380px`
-  - `.file-tree`, `.intelligence-feed`, `.fix-station` styles
-  - `.vitals-bar` fixed bottom bar
-  - `.grade-badge` color variants (A+ to F)
-  - `.settings-modal` centered overlay + dark card
-- [ ] Create `src/ui/app.html` — full 3-panel HTML structure with Settings modal `<div>`
-- [ ] Update `src/main.ts` — full wiring:
-  - Folder picker → `walk_dir` → populate Project Navigator
-  - Analyze button → static analyzer → stream to Intelligence Feed
-  - Finding click → populate Fix Station with finding + causal chain
-  - **Gear icon (⚙) → open Settings modal**
-  - Settings Save → `saveSettings()`; Cancel → close modal
-  - ADB Start/Stop Profile → execute `dumpsys` via `tauri-plugin-shell` using `settings.adbPath`
+### Task 3.1 — CSS Design System + 3-Panel Layout ✅ DONE
+- [x] `src/ui/styles.css` — full dark theme, 3-panel grid, all component styles
+- [x] `src/ui/app.html` — 3-panel layout + Settings modal
+- [x] `index.html` — updated with full app shell (Tauri entry point)
+- [x] `src/main.ts` — full wiring: Open Project, Analyze, Fix Station, ADB profiling, Settings, Export
 
-### Task 3.2 — Exportable Report *(Sub-Task 7 in plan)*
-- [ ] Create `src/ui/report.html` — self-contained, all CSS inline
-- [ ] Report sections: header (grade badge), summary table, findings cards, causal chains, timeline
-- [ ] Data injection: `<script id="scan-data" type="application/json">` slot
-- [ ] Wire "Export Report" button in `app.html`/`main.ts` → generates + writes file via `writeTextFile`
+### Task 3.2 — Exportable Report ✅ DONE
+- [x] `src/ui/report.html` — 947-line self-contained report with demo mode
 
 ---
 
 ## Phase 4 — Repo Polish
 
-### Task 4.1 — Bob Session Files + Assets *(Sub-Task 8 in plan)*
-- [ ] Create `bob_sessions/session-01-architecture.json` through `session-07-fix-engine.json`
-  - Each: `{ "session": "01", "title": "...", "model": "IBM Bob 2.0", "built": [...], "timestamp": "..." }`
-- [ ] Create `assets/README.md` — placeholder noting where demo.gif goes
-- [ ] Create `.gitignore` — exclude `node_modules/`, `target/`, `dist/`
+### Task 4.1 — Bob Session Files ✅ DONE
+- [x] `bob_sessions/` — 7 session JSON files (session-01 through session-07)
+- [x] `.gitignore` — excludes `node_modules/`, `target/`, `dist/`
 
-### Task 4.2 — Final Verification
-- [ ] `npm install` — clean install, no errors
-- [ ] `cargo tauri build` — compiles to `.exe`, no warnings
+### Task 4.2 — Final Verification ⬅ NEXT STEP
+- [ ] `tsc --noEmit` — 0 errors (currently passing ✓)
+- [ ] `cargo tauri build` — reconfirm clean build
 - [ ] Open app — all 3 panels visible at 1400×900
 - [ ] Open Settings (⚙) — ADB path + API key fields appear; save/load works
 - [ ] Point at a sample Android project folder — files appear in navigator
 - [ ] Click Analyze — findings appear in Intelligence Feed
-- [ ] Click a Critical finding — Fix Station shows causal chain
+- [ ] Click a Critical finding — Fix Station shows causal chain + generated fix
 - [ ] Export Report — `.html` file written and opens in browser
+- [ ] Create `assets/README.md` placeholder
+- [ ] Final commit + push
 
 ---
 
