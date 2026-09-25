@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schemas.tauri.app/v2/capabilities.json",
+  "identifier": "default",
+  "description": "EcoTrace default capability — grants file system, shell, dialog, and path access",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "fs:allow-read-dir",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
+    "fs:allow-exists",
+    "fs:scope-appdata-recursive",
+    "shell:allow-execute",
+    "shell:allow-open",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "core:path:allow-resolve-directory"
+  ]
+}

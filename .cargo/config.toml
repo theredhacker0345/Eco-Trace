@@ -1,0 +1,4 @@
+[build]
+# Windows workaround: windres (MinGW) fails when build path contains spaces.
+# This project lives under "eco trace" — redirect target to a clean path.
+target-dir = "C:/ecotrace_target"
