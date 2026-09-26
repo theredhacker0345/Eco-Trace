@@ -14,10 +14,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { Command } from "@tauri-apps/plugin-shell";
 
-import { analyzeProject, buildCallGraph, traceCallChain, type Finding, type FileContent, type ChainNode } from "./analyzer/static.js";
+import { analyzeProject, buildCallGraph, traceCallChain, type Finding, type FileContent, type ChainNode, type CallGraph } from "./analyzer/static.js";
 import { parseDumpsys, computeDelta, type DumpsysResult } from "./parser/dumpsys.js";
 import { calculateGrade, saveScan, type GradeResult, type ScanRecord } from "./grader/grade.js";
 import { loadSettings, saveSettings, getDefaultSettings, type AppSettings } from "./settings.js";
@@ -33,6 +33,7 @@ let gradeResult: GradeResult | null = null;
 let adbBefore: DumpsysResult | null = null;
 let profilingActive = false;
 let settings: AppSettings = getDefaultSettings();
+let cachedCallGraph: CallGraph | null = null;
 
 // ---------------------------------------------------------------------------
 // DOM refs
@@ -202,21 +203,31 @@ btnAnalyze.addEventListener("click", async () => {
   btnAnalyze.disabled = true;
   findings = [];
   gradeResult = null;
+  cachedCallGraph = null;
   resetVitals();
   feedLog("system", `Starting analysis on ${allFiles.length} files…`);
   feedStatus.textContent = "ANALYZING";
   progressBar.classList.add("running");
 
+  cachedCallGraph = buildCallGraph(allFiles);
+
+  // Run all 23 detectors once with the full file list so cross-file
+  // detectors (N06, L05, A02, A03) have project-wide visibility.
+  findings = analyzeProject(allFiles);
+
+  // Group by file for streaming output, preserving per-file order
+  const byFile = new Map<string, typeof findings>();
+  for (const finding of findings) {
+    const arr = byFile.get(finding.file) ?? [];
+    arr.push(finding);
+    byFile.set(finding.file, arr);
+  }
+
   let processed = 0;
-  const callGraph = buildCallGraph(allFiles);
-
   for (const f of allFiles) {
-    // Run all 23 detectors on this file
-    const fileFindings = analyzeProject([f]);
-    findings.push(...fileFindings);
-    processed++;
+    const fileFindings = byFile.get(f.path) ?? [];
 
-    // Stream findings to Intelligence Feed as they're detected
+    // Stream findings to Intelligence Feed as they're "discovered"
     for (const finding of fileFindings) {
       const rel = finding.file.replace(projectPath ?? "", "").replace(/^[\\/]/, "");
       feedLog(
@@ -226,6 +237,7 @@ btnAnalyze.addEventListener("click", async () => {
       );
     }
 
+    processed++;
     setProgress(Math.round((processed / allFiles.length) * 85));
     // Yield to DOM between files so the feed actually renders
     await new Promise((r) => setTimeout(r, 0));
@@ -233,10 +245,10 @@ btnAnalyze.addEventListener("click", async () => {
 
   // Trace causal chains for critical findings
   const criticals = findings.filter((f) => f.severity === "Critical");
-  if (criticals.length) {
+  if (criticals.length && cachedCallGraph) {
     feedLog("system", `Tracing causal chains for ${criticals.length} critical finding(s)…`);
     for (const f of criticals.slice(0, 5)) {
-      const chain = traceCallChain(f, callGraph);
+      const chain = traceCallChain(f, cachedCallGraph);
       if (chain.length > 1) {
         feedLog("critical", `🔴 CHAIN: ${f.patternName} root → ${chain[0].method}() in ${chain[0].file.split(/[\\/]/).pop()}`);
       }
@@ -252,6 +264,7 @@ btnAnalyze.addEventListener("click", async () => {
 
   feedLog("success", `Analysis complete — ${findings.length} findings. Grade: ${gradeResult.letter}`);
   feedStatus.textContent = "DONE";
+  vitalsStatus.textContent = `Grade ${gradeResult.letter}`;
   btnExport.disabled = false;
   btnAnalyze.disabled = false;
 
@@ -276,10 +289,10 @@ function showFinding(f: Finding) {
   detailDescription.textContent = f.description;
   detailSnippet.textContent = f.snippet;
 
-  // Causal chain (only for Critical)
+  // Causal chain (only for Critical) — use the cached call graph built during analysis
   chainTree.innerHTML = "";
   if (f.severity === "Critical" && allFiles.length) {
-    const callGraph = buildCallGraph(allFiles);
+    const callGraph = cachedCallGraph ?? buildCallGraph(allFiles);
     const chain = traceCallChain(f, callGraph);
     renderChainTree(chain);
   }
@@ -365,7 +378,12 @@ btnStopProfile.addEventListener("click", async () => {
   if (!profilingActive) return;
   feedLog("info", "■ Stopping profile…");
   const adbAfter = await runDumpsys();
-  if (adbAfter && adbBefore) {
+  if (!adbAfter) {
+    feedLog("system", "⚠ ADB snapshot failed — could not capture 'after' state. Check ADB connection.");
+    resetProfilingState();
+    return;
+  }
+  if (adbBefore) {
     const delta = computeDelta(adbBefore, adbAfter);
     feedLog("success", `Dynamic profile: drain rate ${delta.drainRateMahPerMin.toFixed(2)} mAh/min over ${delta.elapsedMinutes.toFixed(1)} min.`);
     gradeResult = calculateGrade(findings, delta.drainRateMahPerMin);
@@ -415,18 +433,27 @@ function resetProfilingState() {
 btnExport.addEventListener("click", async () => {
   if (!findings.length) return;
 
-  const reportTemplate = await readTextFile(new URL("./ui/report.html", import.meta.url).pathname.replace(/^\//, "")).catch(() => "");
+  // Fetch the report template through the WebView's own origin — works in both
+  // dev (Vite dev server) and production (tauri://localhost) without needing a
+  // filesystem path, which breaks on Windows with URL.pathname stripping.
+  let reportTemplate = "";
+  try {
+    const resp = await fetch("/src/ui/report.html");
+    if (resp.ok) reportTemplate = await resp.text();
+  } catch { /* fall through */ }
+
   if (!reportTemplate) {
     feedLog("system", "⚠ Could not load report template.");
     return;
   }
 
+  const callGraph = cachedCallGraph ?? buildCallGraph(allFiles);
   const scanData = {
     projectPath: projectPath ?? "Unknown",
     timestamp: Date.now(),
     grade: gradeResult ?? calculateGrade(findings, 0),
     findings: findings.slice(0, 50), // cap at 50 for report size
-    chain: findings[0] && allFiles.length ? traceCallChain(findings[0], buildCallGraph(allFiles)) : [],
+    chain: findings[0] && allFiles.length ? traceCallChain(findings[0], callGraph) : [],
     history: [],
   };
 

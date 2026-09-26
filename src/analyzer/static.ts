@@ -140,8 +140,9 @@ function detectW01(f: FileContent): Finding[] {
       ),
     ];
   }
-  // Both exist — check if release is only in try body, not finally
-  const hasFinallyRelease = /finally\s*\{[^}]*\.release\(/.test(f.content);
+  // Both exist — check if release is only in try body, not finally.
+  // Use the 's' (dotAll) flag so '.' matches newlines in multi-line finally blocks.
+  const hasFinallyRelease = /finally\s*\{[\s\S]*?\.release\(/.test(f.content);
   if (!hasFinallyRelease) {
     const line = firstMatchLine(f.content, acquireRe);
     return [
@@ -749,17 +750,21 @@ function detectA05(f: FileContent): Finding[] {
   const ls = lines(f.content);
   let inOnDraw = false;
   let braceDepth = 0;
+  let sawOpenBrace = false; // true once we've counted ≥1 opening brace
 
   for (let i = 0; i < ls.length; i++) {
     const line = ls[i];
     if (/override\s+fun\s+onDraw\s*\(|protected\s+void\s+onDraw\s*\(/.test(line)) {
       inOnDraw = true;
       braceDepth = 0;
+      sawOpenBrace = false;
     }
     if (inOnDraw) {
       braceDepth += (line.match(/\{/g) || []).length;
       braceDepth -= (line.match(/\}/g) || []).length;
-      if (braceDepth <= 0 && i > 0) {
+      if (braceDepth > 0) sawOpenBrace = true;
+      // Exit only after we've seen the opening brace and depth returns to 0
+      if (sawOpenBrace && braceDepth <= 0) {
         inOnDraw = false;
         continue;
       }
@@ -945,10 +950,32 @@ export function traceCallChain(
 }
 
 function detectMethodAtLine(f: Finding): string {
-  // Best effort: extract method name from the causalChainHint or use a generic name
+  // Walk up from the finding's line in the file to find the nearest enclosing
+  // method definition. This gives us the actual containing method rather than
+  // extracting a name from the causalChainHint text (which points to a callee,
+  // not the containing method).
+  const file = allFilesForChain.get(f.file);
+  if (file) {
+    const ls = lines(file.content);
+    const methodDefRe =
+      /(?:fun\s+|(?:public|private|protected|static|void|override)\s+(?:\w+\s+)*)(\w+)\s*\(/;
+    for (let i = Math.min(f.line - 1, ls.length - 1); i >= 0; i--) {
+      const m = methodDefRe.exec(ls[i]);
+      if (m) {
+        const name = m[1];
+        if (!/^(if|for|while|switch|catch|new|return|class|interface)$/.test(name)) {
+          return name;
+        }
+      }
+    }
+  }
+  // Fallback: extract from causalChainHint or use a generic name
   const hintMatch = f.causalChainHint.match(/(\w+)\(\)/);
   return hintMatch ? hintMatch[1] : f.patternId.toLowerCase() + "_site";
 }
+
+// File content lookup used by detectMethodAtLine — populated by analyzeProject
+const allFilesForChain = new Map<string, FileContent>();
 
 // ---------------------------------------------------------------------------
 // Main orchestrator
@@ -956,6 +983,10 @@ function detectMethodAtLine(f: Finding): string {
 
 export function analyzeProject(files: FileContent[]): Finding[] {
   const results: Finding[] = [];
+
+  // Populate the file map used by detectMethodAtLine / traceCallChain
+  allFilesForChain.clear();
+  for (const f of files) allFilesForChain.set(f.path, f);
 
   for (const f of files) {
     results.push(...detectW01(f));

@@ -448,16 +448,17 @@ function parseScreenTimes(raw: string): { screenOnTimeMs: number; screenOffTimeM
 }
 
 function parseDuration(s: string): number {
-  let ms = 0;
+  let total = 0;
   const h = s.match(/(\d+)h/);
-  const m = s.match(/(\d+)m/);
-  const sec = s.match(/(\d+)s/);
+  // Use negative lookahead to avoid matching "ms" as minutes
+  const m = s.match(/(\d+)m(?!s)/);
+  const sec = s.match(/(\d+)s(?!ec)/);
   const msec = s.match(/(\d+)ms/);
-  if (h) ms += safeInt(h[1]) * 3600000;
-  if (m) ms += safeInt(m[1]) * 60000;
-  if (sec) ms += safeInt(sec[1]) * 1000;
-  if (msec) ms += safeInt(msec[1]);
-  return ms;
+  if (h)    total += safeInt(h[1])    * 3600000;
+  if (m)    total += safeInt(m[1])    * 60000;
+  if (sec)  total += safeInt(sec[1])  * 1000;
+  if (msec) total += safeInt(msec[1]);
+  return total;
 }
 
 // ---------------------------------------------------------------------------
@@ -574,9 +575,15 @@ export function computeDelta(
   const elapsedMinutes = (after.timestamp - before.timestamp) / 60000;
 
   let drainRateMahPerMin = 0;
-  if (elapsedMinutes > 0) {
+  // Only compute drain rate when both charge levels are valid (0–100) and
+  // enough time has elapsed. A chargeLevel of -1 means "not parsed" and
+  // would produce a wildly wrong drain figure.
+  const levelsValid =
+    before.chargeLevel >= 0 && before.chargeLevel <= 100 &&
+    after.chargeLevel  >= 0 && after.chargeLevel  <= 100;
+  if (elapsedMinutes > 0 && levelsValid) {
     drainRateMahPerMin =
-      ((before.chargeLevel - after.chargeLevel) / 100) * batteryCapacityMah / elapsedMinutes;
+      Math.max(0, ((before.chargeLevel - after.chargeLevel) / 100) * batteryCapacityMah / elapsedMinutes);
   }
 
   // topDrainers: sort after.perUid by cpuTimeMs desc, take top 5
