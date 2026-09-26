@@ -1,0 +1,72 @@
+name: Build EcoTrace Windows EXE
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust (MSVC toolchain)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable-x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build Tauri app (release)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'EcoTrace ${{ github.ref_name }}'
+          releaseBody: |
+            ## EcoTrace Release
+
+            ### Installation
+            1. Download `EcoTrace_*_x64-setup.exe` below
+            2. Run the installer — click **"More info" → "Run anyway"** if Windows SmartScreen appears
+               (the app is unsigned; SmartScreen shows this warning for all unsigned apps)
+            3. Launch EcoTrace from the Start Menu or Desktop shortcut
+
+            ### What's included
+            - `EcoTrace_*_x64-setup.exe` — NSIS installer (recommended)
+            - `EcoTrace_*_x64_en-US.msi` — MSI installer (alternative)
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false
+
+      - name: Upload EXE as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EcoTrace-Windows-EXE
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 30

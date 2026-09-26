@@ -1,2 +1,2 @@
 ﻿[build]
-target-dir = "C:/ecotrace_target"
+target = "x86_64-pc-windows-msvc"

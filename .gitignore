@@ -1,9 +1,11 @@
-# Node
+ï»¿# Node
 node_modules/
 npm-debug.log*
 
-# Tauri build output
+# Tauri / Rust build output (local & CI)
 src-tauri/target/
+target/
+**/target/
 
 # Vite build output
 dist/
@@ -14,5 +16,19 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+desktop.ini
 
-# bob_sessions/ is intentionally tracked — contains hackathon session evidence
+# Editor / IDE
+.vscode/settings.json
+.idea/
+*.suo
+*.user
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# bob_sessions/ is intentionally tracked -- contains hackathon session evidence
