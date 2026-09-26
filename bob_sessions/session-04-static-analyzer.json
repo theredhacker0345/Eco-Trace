@@ -1,4 +1,5 @@
-﻿﻿﻿{
+{
+  "_provenance": "Hand-written summary of an IBM Bob 2.0 build session, authored for this repository. This is NOT a machine export from Bob. To substitute a real export, delete this file and replace it with the output of Bob's session export. See bob_sessions/README.md.",
   "session": "04",
   "title": "23-Pattern Static Analysis Engine",
   "model": "IBM Bob 2.0",
@@ -14,9 +15,14 @@
     "TypeScript interfaces: FileContent, Finding, CallGraph, CallEdge, ChainNode"
   ],
   "bob_reasoning": "The 23 patterns span 4 categories with varying detection complexity. Simplest patterns (N02, N03 - missing timeouts) need only positive detection of OkHttpClient construction without timeout calls. Hardest patterns (W06 nested wakelocks, A05 heavy onDraw) require context around the detection site - W06 looks for acquire() twice in the same class, A05 looks for allocations inside the onDraw method body. The call graph builder uses a two-pass approach: first pass collects all method definitions with their file+line, second pass collects call sites. traceCallChain walks backwards using the call graph to find the root cause entry point (lifecycle method).",
-  "files_created": ["src/analyzer/static.ts"],
+  "files_created": [
+    "src/analyzer/static.ts"
+  ],
   "patterns_covered": 23,
-  "languages_supported": ["java", "kotlin"],
+  "languages_supported": [
+    "java",
+    "kotlin"
+  ],
   "exports": [
     "analyzeProject",
     "buildCallGraph",
@@ -29,4 +35,3 @@
     "Category"
   ]
 }
-

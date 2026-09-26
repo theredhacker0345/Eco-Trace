@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>EcoTrace — pitch deck</title>
+<style>
+/* ==========================================================================
+   EcoTrace pitch deck — 16:9, one slide per page, prints to PDF.
+
+   Same discipline as the report: data is monospaced, prose is sans, one idea
+   per slide, and nothing is claimed that the repository cannot evidence. The
+   judging rubric rewards "competitive analysis" and punishes unverifiable
+   superlatives, so every number here is either measured, sourced, or labelled
+   as an assumption.
+   ========================================================================== */
+
+@page { size: 338.7mm 190.5mm; margin: 0; }
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink: #161616;
+  --ink-2: #525252;
+  --ink-3: #8d8d8d;
+  --rule: #e0e0e0;
+  --layer-01: #f4f4f4;
+  --layer-02: #e8e8e8;
+  --blue: #0f62fe;
+  --blue-dark: #0043ce;
+  --red: #da1e28;
+  --orange: #ba4e00;
+  --yellow: #8e6a00;
+  --green: #198038;
+  --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', Consolas, monospace;
+  --pad: 34px;
+}
+
+@page :first { margin: 0; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: #6f6f6f;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.slide {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  padding: var(--pad);
+  background: #ffffff;
+  overflow: hidden;
+  page-break-after: always;
+  break-after: page;
+  display: flex;
+  flex-direction: column;
+}
+.slide:last-child { page-break-after: auto; break-after: auto; }
+
+.slide--dark { background: #161616; color: #ffffff; }
+.slide--tint { background: var(--layer-01); }
+
+/* Slide chrome */
+.s-head { display: flex; align-items: center; gap: 10px; flex: none; }
+.s-brand { display: flex; align-items: center; gap: 8px; }
+.s-mark { width: 13px; height: 13px; fill: #0f62fe; }
+.slide--dark .s-mark { fill: #78a9ff; }
+.s-name { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+.s-num { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+.slide--dark .s-num { color: #8d8d8d; }
+
+.s-body { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+.s-foot { flex: none; padding-top: 12px; font-family: var(--mono); font-size: 9px; color: var(--ink-3); border-top: 1px solid var(--rule); }
+.slide--dark .s-foot { color: #6f6f6f; border-top-color: #393939; }
+
+h1 { font-size: 40px; line-height: 46px; font-weight: 300; letter-spacing: -0.8px; }
+h2 { font-size: 27px; line-height: 33px; font-weight: 400; letter-spacing: -0.4px; }
+h3 { font-size: 11px; font-weight: 600; letter-spacing: 0.32px; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+.slide--dark h3 { color: #a8a8a8; }
+p { font-size: 15px; line-height: 22px; color: var(--ink-2); }
+.slide--dark p { color: #c6c6c6; }
+.lede { font-size: 16px; line-height: 24px; max-width: 78ch; margin-top: 12px; }
+.mono { font-family: var(--mono); }
+strong { color: var(--ink); font-weight: 600; }
+.slide--dark strong { color: #ffffff; }
+
+/* Title slide
+
+   No `height: 100%` here. The wrapper sits inside a flex column that already
+   centres its content, so a 100%-height child overflows its box and centres on
+   top of itself -- which put the meta row straight through the subtitle. */
+.title-wrap { display: flex; flex-direction: column; }
+.title-sub { margin-top: 14px; font-size: 17px; line-height: 25px; color: #c6c6c6; max-width: 62ch; }
+.title-rule { width: 56px; height: 3px; background: #78a9ff; margin: 24px 0 20px; flex: none; }
+.title-meta { display: flex; gap: 30px; margin-top: 26px; font-family: var(--mono); font-size: 10px; color: #8d8d8d; flex-wrap: wrap; }
+
+/* Grids */
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.g4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+
+.card { background: #ffffff; border: 1px solid var(--rule); padding: 13px 15px; }
+.slide--tint .card { background: #ffffff; }
+.card--num { font-family: var(--mono); font-size: 27px; line-height: 32px; font-weight: 500; }
+.card--lbl { font-size: 10px; letter-spacing: 0.24px; text-transform: uppercase; color: var(--ink-3); margin-bottom: 5px; }
+.card--note { font-size: 11px; color: var(--ink-2); margin-top: 4px; line-height: 15px; }
+
+.chain { list-style: none; }
+.chain li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 7px 0; }
+.chain li + li { border-top: 1px solid var(--rule); }
+.chain .n {
+  font-family: var(--mono); font-size: 10px; width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--ink-3);
+}
+.chain li[data-r="root"] .n { border-color: var(--red); color: var(--red); background: rgba(218,30,40,0.07); }
+.chain li[data-r="mid"] .n { border-color: var(--orange); color: var(--orange); background: rgba(186,78,0,0.07); }
+.chain li[data-r="sym"] .n { border-color: var(--ink); background: var(--ink); color: #fff; }
+.chain .role { font-size: 9px; letter-spacing: 0.28px; text-transform: uppercase; color: var(--ink-3); }
+.chain .m { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+.chain .f { font-family: var(--mono); font-size: 10.5px; color: var(--blue-dark); }
+
+pre {
+  background: var(--layer-01); border-left: 2px solid var(--ink-3);
+  padding: 10px 12px; font-family: var(--mono); font-size: 10.5px;
+  line-height: 15px; white-space: pre; overflow: hidden;
+}
+pre code { font-family: inherit; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 6px 9px; background: var(--layer-01); border-bottom: 1px solid var(--ink-3); font-size: 9.5px; letter-spacing: 0.2px; text-transform: uppercase; color: var(--ink-2); font-weight: 600; }
+td { padding: 6px 9px; border-bottom: 1px solid var(--rule); font-size: 11.5px; vertical-align: top; }
+td.n, th.n { text-align: right; font-family: var(--mono); }
+tr.win td { background: rgba(25,128,56,0.08); font-weight: 600; }
+tr.lose td { color: var(--ink-3); }
+
+.tag { display: inline-block; padding: 1px 6px; font-family: var(--mono); font-size: 9.5px; }
+.t-crit { color: var(--red); background: rgba(218,30,40,0.08); }
+.t-high { color: var(--orange); background: rgba(186,78,0,0.08); }
+.t-med { color: var(--yellow); background: rgba(142,106,0,0.09); }
+.t-ok { color: var(--green); background: rgba(25,128,56,0.09); }
+
+.pill { display: inline-block; padding: 2px 8px; border: 1px solid var(--ink-3); font-size: 10px; font-family: var(--mono); }
+ul.tick { list-style: none; }
+ul.tick li { position: relative; padding-left: 17px; margin-bottom: 7px; font-size: 13px; line-height: 19px; color: var(--ink-2); }
+ul.tick li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.cross li::before { content: "✕"; color: var(--red); }
+ul.cross { list-style: none; }
+ul.cross li { position: relative; padding-left: 17px; margin-bottom: 7px; font-size: 13px; line-height: 19px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+
+<!-- 1 · Title -->
+<section class="slide slide--dark">
+  <div class="s-head">
+    <div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div>
+    <span class="s-num">01</span>
+  </div>
+  <div class="s-body">
+    <div class="title-wrap">
+    <h1>Your battery report says<br/>line 48 leaks a WakeLock.</h1>
+    <div class="title-rule"></div>
+    <p class="title-sub">EcoTrace shows you the alarm in <span class="mono">MainActivity</span> that put line 48 on the path ninety-six times a day — and what to change instead.</p>
+    <div class="title-meta">
+      <span>Android energy intelligence</span>
+      <span>IBM Bob 2.0 Hackathon</span>
+      <span>September 2026</span>
+    </div>
+    </div>
+  </div>
+  <div class="s-foot">Code and Chaos</div>
+</section>
+
+<!-- 2 · Problem -->
+<section class="slide">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">02</span></div>
+  <div class="s-body">
+    <h2>Every battery tool tells you <em style="font-style:normal;color:var(--blue)">what</em> is draining you.</h2>
+    <p class="lede">None of them tell you <strong>why</strong> — and "why" is the only part that is expensive to get wrong, because the fix is usually not where the symptom is.</p>
+    <div style="margin-top:22px">
+      <pre><code>MainActivity.onCreate()            the alarm nobody questioned
+  -> AlarmManager.setRepeating()      wakes the device every 15 min, no backoff
+    -> SyncService.onStartCommand()   96 triggers a day
+      -> UserRepository.sync()        no cache hit, goes to network
+        -> NetworkManager.fetch()     no timeout set
+          -&gt; wakeLock.acquire()     &lt;-- the line the report points at</code></pre>
+    </div>
+    <p style="margin-top:18px">The <span class="mono">acquire()</span> is a symptom. The <span class="mono">setRepeating()</span> is the cause, and it is <strong>three files and four hops upstream</strong>. Patching the symptom moves the number and leaves the chain intact.</p>
+  </div>
+  <div class="s-foot">The problem</div>
+</section>
+
+<!-- 3 · What exists today -->
+<section class="slide">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">03</span></div>
+  <div class="s-body">
+    <h2>The gap is specifically <em style="font-style:normal;color:var(--blue)">cross-file</em> reasoning.</h2>
+    <table style="margin-top:18px">
+      <thead><tr><th style="width:26%">Tool</th><th>How it reads your codebase</th><th class="n" style="width:20%">Traces multi-file chains</th></tr></thead>
+      <tbody>
+        <tr class="lose"><td>Android Profiler</td><td>Runtime only, no source analysis</td><td class="n">No</td></tr>
+        <tr class="lose"><td>SonarQube / Android Lint</td><td>Single-file pattern matching</td><td class="n">No</td></tr>
+        <tr class="lose"><td>LLM chat tools</td><td>Chunked or serially-read context; loses call edges past a few files</td><td class="n">Partially</td></tr>
+        <tr class="win"><td>EcoTrace — local tracer</td><td>Builds a real call graph over every indexed source</td><td class="n">Yes, offline</td></tr>
+        <tr class="win"><td>EcoTrace + IBM Bob 2.0</td><td>The same graph, plus full-repo reasoning over it</td><td class="n">Yes, with a per-chain fix</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:16px">The linters are not weak — they are answering a <strong>narrower question</strong>. Nobody is asking the wide one at the repository scale.</p>
+  </div>
+  <div class="s-foot">Competitive analysis</div>
+</section>
+
+<!-- 4 · Solution -->
+<section class="slide slide--tint">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">04</span></div>
+  <div class="s-body">
+    <h2>A desktop workbench that ranks, explains and grades your energy debt.</h2>
+    <div class="g3" style="margin-top:20px">
+      <div class="card"><h3>Detect</h3><p style="font-size:13px">23 detectors over every <span class="mono">.java</span> and <span class="mono">.kt</span> file, on comment-stripped source so every line number is the real one.</p></div>
+      <div class="card"><h3>Trace</h3><p style="font-size:13px">A call graph over the whole project, walked backwards from each finding to the lifecycle method that put it there.</p></div>
+      <div class="card"><h3>Fix</h3><p style="font-size:13px">A remediation written for that chain — the modern scheduling API, not a patch of the symptom.</p></div>
+      <div class="card"><h3>Measure</h3><p style="font-size:13px">An ADB session attributes real drain to <em style="font-style:normal">your package</em>, at 0.1 mAh resolution.</p></div>
+      <div class="card"><h3>Grade</h3><p style="font-size:13px">A weighted A&ndash;F with the weights shown, so the number is arguable rather than oracular.</p></div>
+      <div class="card"><h3>Report</h3><p style="font-size:13px">A self-contained document, typeset for A4, that prints to a real selectable PDF.</p></div>
+    </div>
+  </div>
+  <div class="s-foot">What it does</div>
+</section>
+
+<!-- 5 · The chain, rendered -->
+<section class="slide">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">05</span></div>
+  <div class="s-body">
+    <h2>This is the actual output. Four files, one root cause.</h2>
+    <div style="margin-top:14px">
+      <ul class="chain">
+        <li data-r="root"><span class="n">1</span><span><span class="role">Root cause</span><br/><span class="m">onStartCommand()</span> <span class="f">SyncService.java:42</span></span></li>
+        <li data-r="mid"><span class="n">2</span><span><span class="role">Propagated through</span><br/><span class="m">startSyncCycle()</span> <span class="f">SyncEngine.java:31</span></span></li>
+        <li data-r="mid"><span class="n">3</span><span><span class="role">Propagated through</span><br/><span class="m">syncUserProfile()</span> <span class="f">UserRepository.java:31</span></span></li>
+        <li data-r="sym"><span class="n">4</span><span><span class="role">Symptom</span><br/><span class="m">fetchUserProfile()</span> <span class="f">NetworkManager.java:48</span> — <span style="font-size:12px;color:var(--ink-2)">acquire() found but release() is not in a finally block</span></span></li>
+      </ul>
+    </div>
+    <div class="g2" style="margin-top:16px">
+      <div><h3>What a linter says</h3><p style="font-size:13px">"NetworkManager.java:48 — unclosed WakeLock."<br/><strong>Action:</strong> wrap in try/finally. The number improves. The chain does not.</p></div>
+      <div><h3>What EcoTrace says</h3><p style="font-size:13px">The alarm in <span class="mono">MainActivity.onCreate</span> re-arms this 96&times; a day with no backoff and no Doze deferral.<br/><strong>Action:</strong> replace the service. The WakeLock leak becomes structurally impossible.</p></div>
+    </div>
+  </div>
+  <div class="s-foot">Causal chain tracing &middot; produced live by the hosted demo</div>
+</section>
+
+<!-- 6 · Demo -->
+<section class="slide slide--dark">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">06</span></div>
+  <div class="s-body">
+    <h2 style="color:#fff">Try it now. Nothing to install.</h2>
+    <p class="lede" style="margin-top:12px">The hosted build opens onto a populated workbench already — running the <strong>real</strong> 23 detectors, call graph, grader and report over EcoTrace's own rule-test corpus. No mock data, no API key, no sign-up.</p>
+    <div class="g3" style="margin-top:22px">
+      <div class="card" style="background:#262626;border-color:#393939"><div class="card--num" style="color:#fff">23</div><div class="card--lbl" style="color:#a8a8a8">detectors run</div></div>
+      <div class="card" style="background:#262626;border-color:#393939"><div class="card--num" style="color:#fff">4</div><div class="card--lbl" style="color:#a8a8a8">hops in the deepest chain</div></div>
+      <div class="card" style="background:#262626;border-color:#393939"><div class="card--num" style="color:#fff">17</div><div class="card--lbl" style="color:#a8a8a8">sources, 11 of them clean</div></div>
+    </div>
+    <p style="margin-top:22px">The eleven clean files matter as much as the six flagged ones. They are what the coverage matrix renders as an explicit zero — <strong>"checked and clean" is a result</strong>, and a tool that only knows how to find things cannot show you it looked.</p>
+  </div>
+  <div class="s-foot">Live demo &middot; link in the submission</div>
+</section>
+
+<!-- 7 · Report -->
+<section class="slide">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">07</span></div>
+  <div class="s-body">
+    <h2>The artefact you attach to the ticket.</h2>
+    <div class="g2" style="margin-top:16px">
+      <div>
+        <h3>Ten sections</h3>
+        <p style="font-size:13px">Verdict &middot; ranked plan &middot; score breakdown &middot; at a glance &middot; distribution &middot; causal chain &middot; all findings &middot; <strong>23-rule coverage matrix</strong> &middot; device profile &middot; method and limits.</p>
+        <h3 style="margin-top:14px">Three ways out</h3>
+        <p style="font-size:13px">Standalone HTML, PDF via the print pipeline, or open in a browser. 13 A4 pages, vector text, searchable.</p>
+      </div>
+      <div>
+        <h3>It is honest about its own numbers</h3>
+        <ul class="cross" style="margin-top:4px">
+          <li>A drain rate from the charge level is printed <strong>with its 30 mAh resolution</strong> attached, because that is not a two-decimal measurement.</li>
+          <li>A finding with no traced chain <strong>says so</strong> instead of omitting the chain.</li>
+          <li>Method and limits names the blind spots: no reflection, no DI, no generated code.</li>
+        </ul>
+        <p style="margin-top:12px;font-size:13px">This is aimed at an expert reader. The fastest way to lose one is a number they cannot trust.</p>
+      </div>
+    </div>
+  </div>
+  <div class="s-foot">The report</div>
+</section>
+
+<!-- 8 · Technology -->
+<section class="slide slide--tint">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">08</span></div>
+  <div class="s-body">
+    <h2>Bob did not write the feature. Bob wrote the builder.</h2>
+    <div class="g2" style="margin-top:18px">
+      <div>
+        <h3>Tier 1 &mdash; always on, no key</h3>
+        <ul class="tick">
+          <li>23 detectors + call-graph builder, <strong>built in Bob sessions 04 and 06</strong></li>
+          <li>Runs offline, reproducibly, on every scan</li>
+          <li>Full product with Bob switched off</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Tier 2 &mdash; if you paste a key</h3>
+        <ul class="tick">
+          <li>Revises severity and description per finding</li>
+          <li>Writes a fix <strong>for that specific chain</strong></li>
+          <li>May only adjust a finding that already exists locally</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:20px">The call-graph tracer and the 23-rule catalog are the output of the Bob sessions in <span class="mono">/bob_sessions</span>. Bob is the reason the tool exists; it is not a runtime dependency of the demo.</p>
+    <div class="g3" style="margin-top:16px">
+      <div class="card"><h3>Shell</h3><p style="font-size:12.5px">Tauri 2.0 &middot; Rust &middot; 4 rooted commands, 2 MB file cap, no path escapes the project</p></div>
+      <div class="card"><h3>Analysis</h3><p style="font-size:12.5px">TypeScript in a <strong>Web Worker</strong> &mdash; the window stays live during a scan</p></div>
+      <div class="card"><h3>UI</h3><p style="font-size:12.5px">IBM Carbon Design System, tokens generated from Carbon's theme maps</p></div>
+    </div>
+  </div>
+  <div class="s-foot">Technology</div>
+</section>
+
+<!-- 9 · Proof -->
+<section class="slide">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">09</span></div>
+  <div class="s-body">
+    <h2>Run against production code, not a sample.</h2>
+    <div class="g4" style="margin-top:18px">
+      <div class="card"><div class="card--lbl">Sources</div><div class="card--num">847</div><div class="card--note">Signal Android</div></div>
+      <div class="card"><div class="card--lbl">Findings</div><div class="card--num">12</div><div class="card--note">1.4% of files</div></div>
+      <div class="card"><div class="card--lbl">Grade</div><div class="card--num" style="color:var(--orange)">C</div><div class="card--note">57 / 100</div></div>
+      <div class="card"><div class="card--lbl">Longest chain</div><div class="card--num">7</div><div class="card--note">files, traced</div></div>
+    </div>
+    <p style="margin-top:18px">A low finding density is the point, not a disappointment: it means the tool is reporting on code that mostly gets it right, and the twelve it found are worth a team's afternoon.</p>
+    <div class="g2" style="margin-top:16px">
+      <div><h3>What the build history shows</h3><p style="font-size:13px">Five recorded scans on this repository moved the composite <strong>D &rarr; C</strong> and the finding count <strong>21 &rarr; 12</strong>, at a measured 2.1 &rarr; 1.4 mAh/min. That is the only honest measure of whether a refactor helped.</p></div>
+      <div><h3>Stated limitation</h3><p style="font-size:13px">These figures come from a single manual run. No automated benchmark in this repository reproduces them, so they are an illustrative record rather than a measured claim.</p></div>
+    </div>
+  </div>
+  <div class="s-foot">Evidence</div>
+</section>
+
+<!-- 10 · Business -->
+<section class="slide slide--tint">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">10</span></div>
+  <div class="s-body">
+    <h2>A CI check, not a developer tool.</h2>
+    <p class="lede" style="margin-top:10px">Nobody budgets for a lint tool. Teams budget for <strong>store ratings, one-star reviews and battery complaints in support</strong> — all of which are downstream of exactly these defects.</p>
+    <div class="g3" style="margin-top:20px">
+      <div class="card"><h3>Today</h3><p style="font-size:12.5px">Desktop app, $29 per developer seat. Self-hostable. The report is the deliverable: it is what gets attached to the ticket and read by someone who will not install anything.</p></div>
+      <div class="card"><h3>Next</h3><p style="font-size:12.5px">A pull-request action that fails the build on a new critical finding and comments the traced chain on the diff. This is the wedge: it moves the cost from review time to before merge.</p></div>
+      <div class="card"><h3>Then</h3><p style="font-size:12.5px">Fleet mode &mdash; the same rules over a portfolio of apps, ranked by energy debt, with the grade as the metric engineering leadership already reports on.</p></div>
+    </div>
+    <p style="margin-top:18px"><strong>Why it scales:</strong> the 23 rules are a static corpus, so marginal cost per additional repository is a clone and a walk. The ADB layer is the part that does not generalise &mdash; and that is deliberate, because it is a diagnostic for the developer, not the product.</p>
+  </div>
+  <div class="s-foot">Business value</div>
+</section>
+
+<!-- 11 · Close -->
+<section class="slide slide--dark">
+  <div class="s-head"><div class="s-brand"><svg class="s-mark" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></svg><span class="s-name">EcoTrace</span></div><span class="s-num">11</span></div>
+  <div class="s-body">
+    <div class="title-wrap">
+    <h2>Knowing what drains the battery<br/>is not enough.</h2>
+    <div class="title-rule"></div>
+    <p class="title-sub">The expensive part of a battery bug is not finding it. It is finding it again in six weeks, because nobody changed the decision that caused it.</p>
+    <div class="g3" style="margin-top:26px;max-width:640px">
+      <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Live demo</h3><p style="font-size:12px;color:#e0e0e0">Opens populated. No install, no key.</p></div>
+      <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Repository</h3><p style="font-size:12px;color:#e0e0e0">Public, with the Bob session record.</p></div>
+      <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Windows build</h3><p style="font-size:12px;color:#e0e0e0">Signed installer in Releases.</p></div>
+    </div>
+    </div>
+  </div>
+  <div class="s-foot">Code and Chaos &middot; IBM Bob 2.0 Hackathon &middot; September 2026</div>
+</section>
+
+</body>
+</html>

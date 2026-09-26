@@ -24,14 +24,16 @@
 
 <br/>
 
-![EcoTrace Demo](assets/demo.gif)
+![EcoTrace — causal chain tracing](assets/cover.png)
 
 <br/>
 
 [Download EXE](https://github.com/theredhacker0345/Eco-Trace/releases) &nbsp;|&nbsp;
+[Live demo](#live-demo) &nbsp;|&nbsp;
 [Build from Source](#build-from-source) &nbsp;|&nbsp;
 [How It Works](#how-it-works) &nbsp;|&nbsp;
 [The Report](#the-report) &nbsp;|&nbsp;
+[Business](#business) &nbsp;|&nbsp;
 [Setup Guide](SETUP.md)
 
 </div>
@@ -74,21 +76,28 @@ switched off.
 
 ---
 
-## Why IBM Bob 2.0 -- and Why Nothing Else Can Do This
+## Why two tiers -- and what each one is for
 
-| Tool | How it reads your codebase | Traces multi-file call chains? |
-|---|---|:---:|
-| Android Profiler | Runtime only, no source analysis | No |
-| SonarQube / Lint | Single-file pattern matching | No |
-| GPT-4o / Gemini | Chunked context, loses cross-file links at scale | Partially |
-| Cursor / Copilot | Embedding retrieval, misses non-obvious dependencies | Partially |
-| **EcoTrace (local)** | Builds a real call graph from every indexed source | **Yes, offline** |
-| **EcoTrace + IBM Bob 2.0** | Full repository as a first-class primitive, plus the local graph | **Yes, and writes a fix per chain** |
+Bob is how the tool was *built*. It is not what the tool *depends on*. Those are
+different claims and the distinction is the point.
 
-The local tracer is what no linter on the table does: it is a genuine call
-graph over the whole project, not a per-file scan. Bob 2.0 adds the layer a
-call graph cannot reach — reasoning about whether the traced path is the one
-that actually matters, and rewriting the fix for that path.
+| Tier | Runs | Needs a key? | What it contributes |
+|---|---|:---:|---|
+| **Local call-graph tracer** | On every scan, in every build | No | 23 detectors and a real cross-file call graph. Runs offline, costs nothing, is reproducible. The demo and the hosted build use only this. |
+| **IBM Bob 2.0** | Only if you paste a key | Yes | Holds the whole repository in one reasoning pass, so it can revise a severity, correct a description, and write a fix written *against that specific chain*. |
+
+The 23 detectors and the call-graph builder are the output of the Bob sessions
+recorded in [`/bob_sessions`](bob_sessions/README.md). A tool that only works
+when you hand it an API key is a demo, so the chain, the grade, the history and
+the entire report are all produced with Bob switched off.
+
+**A note on the claim this replaced.** An earlier version of this README said
+that no other tool could trace these chains, and that the local tracer was
+impossible. Both were wrong, and the local tracer shipped. What can honestly be
+said is narrower and more useful: a *call graph* over a whole repository is not
+something a per-file linter has, and holding the whole repository in one
+reasoning pass is not something a call graph has. EcoTrace does the first
+natively and uses the second when it is available.
 
 ---
 
@@ -331,6 +340,36 @@ a collapsed row in a PDF would be a finding the reader cannot see.
 ---
 ---
 
+## Business
+
+Nobody budgets for a lint tool. Teams budget for **store ratings, one-star
+reviews, and battery complaints in support** — and all three are downstream of
+exactly these defects, discovered late and fixed twice.
+
+| Stage | Product | Why it holds |
+|---|---|---|
+| **Now** | Desktop app, $29 per developer seat. Self-hostable. | The report is the deliverable. It is what gets attached to a ticket and read by someone who will never install anything, which is why the report and not the UI is the product surface. |
+| **Next** | A pull-request action that fails the build on a new critical finding and comments the traced chain on the diff. | The wedge. It moves the cost from review time to before merge, where a defect is cheap. It is also the smallest possible surface: the detector set already exists and is deterministic. |
+| **Then** | Fleet mode — the same rules over a portfolio of apps, ranked by energy debt. | The grade becomes a number engineering leadership already reports on, so it survives contact with a planning cycle. |
+
+**Why it scales cheaply.** The 23 rules are a static corpus, so the marginal cost
+of one more repository is a clone and a walk. No per-repo training, no indexing
+service, no inference bill. That is the structural difference from anything that
+needs a model in the loop to *find* the defect — here the model is optional and
+the product works without it.
+
+**What deliberately does not generalise.** The ADB layer. Device profiling is a
+diagnostic for the developer looking at the bug in front of them, not a product
+feature. Putting it on the critical path would make the tool depend on hardware
+and would make the hosted demo impossible. Keeping it optional is precisely what
+lets the product be a static analyser first.
+
+**The honest constraint.** The rule corpus is Android-specific, and its precision
+on a large codebase is unmeasured — the 12-findings-in-847-files run is a single
+manual pass. Nobody should infer a false-positive rate from it.
+
+---
+
 ## Grading System
 
 | Grade | Drain Rate | Critical Findings | High Findings |
@@ -440,6 +479,56 @@ frozen window cannot report its own progress, so a long scan looked like a hang.
 
 ---
 
+## Live demo
+
+The hosted build is **the same bundle as the desktop app**. It is not a
+mock-up, a recording, or a separate codebase: outside the Tauri shell, EcoTrace
+mounts a bundled sample project and runs the actual detector set over it.
+
+Open the link and, without clicking anything, you land on a populated workbench
+already showing a traced four-file causal chain, because the demo deliberately
+selects the deepest chain rather than the first finding.
+
+| | |
+|---|---|
+| **Hosted demo** | *(add your deployment URL here — see Deploy below)* |
+| **Pitch deck** | [`docs/deck/EcoTrace-pitch-deck.pdf`](docs/deck/EcoTrace-pitch-deck.pdf) — 11 slides, 16:9 |
+| **Windows build** | [Releases](https://github.com/theredhacker0345/Eco-Trace/releases) |
+
+What runs, and what honestly does not:
+
+- **Real:** all 23 detectors, comment-stripped source, the call-graph builder,
+  the chain tracer, the grader, the report, PDF export.
+- **Not real:** ADB profiling (there is no phone) and IBM Bob enrichment (that
+  needs an API key). The demo shows the authored template fix, labelled as a
+  template, which is exactly what a user without a key sees in the desktop app.
+
+The sample is [`src/demo-project/`](src/demo-project/README.md) — EcoTrace's own
+**rule test corpus**: ten sources with deliberately planted defects, seven
+deliberately clean. The clean ones are the point. They are what the report's
+coverage matrix renders as an explicit zero, and a tool that has not shown you
+it looked is a tool you cannot calibrate against.
+
+### Deploy
+
+The build output is portable — `vite.config.ts` sets `base: "./"`, so one
+`dist/` deploys to a domain root, a subpath, or straight off disk.
+
+**GitHub Pages (configured, no account needed beyond this repo).**
+`.github/workflows/deploy-demo.yml` runs on every push to `main`, typechecks,
+builds, asserts the bundle actually contains the demo, and publishes. To turn it
+on: **Settings → Pages → Source: GitHub Actions**. The URL appears in the
+workflow summary after the first run.
+
+**Vercel (if you prefer it — lablab names it first).** Import the repo, accept
+the Vite preset, deploy. No configuration required; the relative base works as-is.
+
+**Locally.** `npm run build && npx serve dist` — the demo mounts in any static
+server, because the check for a Tauri bridge is a runtime one rather than a
+build-time one.
+
+---
+
 ## Installation
 
 ### Download (Recommended)
@@ -519,8 +608,9 @@ Eco-Trace/
 +-- .bob/
 |   +-- rules-agent/energy.md  Bob's 23-pattern detection rules
 +-- bob_sessions/            IBM Bob 2.0 session exports (7 sessions)
-+-- docs/                    Architecture plan, testing guide
-+-- assets/                  Demo assets (demo.gif not yet committed — see assets/README.md)
++-- docs/                    Architecture plan, testing guide, pitch deck
++-- src/demo-project/        Rule test corpus served by the hosted demo
++-- assets/                  Cover image, demo assets
 +-- .github/workflows/       CI: build, typecheck, release
 +-- README.md
 +-- SETUP.md
@@ -530,17 +620,15 @@ Eco-Trace/
 
 ## Bob Sessions
 
-All 7 IBM Bob 2.0 session exports live in [`/bob_sessions/`](bob_sessions/). They show exactly how Bob reasoned through every stage of the build.
+`/bob_sessions/` records the IBM Bob 2.0 build sessions that produced the
+detector set, the call-graph tracer, the parser, the grader and the UI.
 
-| Session | Title (from the session export) | What Bob Built |
-|---|---|---|
-| `session-01-architecture.json` | Full Project Architecture & Planning | Full project plan, 10 architectural decisions |
-| `session-02-tauri-scaffold.json` | Tauri 2.0 Windows Project Scaffold | Tauri 2.0 shell + Rust bridge |
-| `session-03-dumpsys-parser.json` | ADB dumpsys batterystats Parser | ADB output parser (7 interfaces, 8 parsers) |
-| `session-04-static-analyzer.json` | 23-Pattern Static Analysis Engine | 23-pattern engine + call graph builder |
-| `session-05-grader-ui.json` | Grading Engine + Settings Store + UI | Grading engine + settings store + workbench shell |
-| `session-06-call-chain.json` | Causal Chain Tracing + Inspector UI | Causal chain tracing + finding inspector |
-| `session-07-fix-engine.json` | Fix Generation + Final Integration | Bob-generated code fix system |
+> **These are hand-written summaries, not machine exports from Bob.** They are a
+> useful record of the build and they are not evidence of Bob's output. Each file
+> says so in a `_provenance` field, and
+> [`bob_sessions/README.md`](bob_sessions/README.md) explains what they are, what
+> they are not, and how to substitute real exports. Nothing in the codebase reads
+> this folder, so replacing it cannot break the application.
 
 ---
 
@@ -558,25 +646,25 @@ All 7 IBM Bob 2.0 session exports live in [`/bob_sessions/`](bob_sessions/). The
 
 ## Why This Wins
 
-Most hackathon submissions use Bob as a smarter autocomplete. EcoTrace uses it
-as what it is actually good at — reasoning over a whole repository at once —
-and, more importantly, does not *depend* on it.
+Most hackathon submissions use Bob as a smarter autocomplete. EcoTrace used it
+to build something, and then did the part that does not need it.
 
-Two things came out of building it that are worth calling out:
+Two things are worth calling out:
 
 - **A call-graph tracer that runs offline.** The chain in the diagram at the top
   of this file is produced with no API key, no network, and no service. That
-  makes causal analysis a feature of the product rather than a demo condition.
-- **A report that is honest about its own numbers.** A drain rate derived from
-  the battery charge level is printed with its resolution attached, because a
-  30 mAh granularity is not a two-decimal-place measurement. A finding with no
-  traced chain says so instead of omitting the chain. The 23-rule coverage
-  matrix shows the rules that found nothing, as zeros. This is aimed at an expert
-  reader, and the fastest way to lose one is a number they cannot trust.
+  makes causal analysis a property of the product rather than a demo condition —
+  and it is the reason the hosted demo can hand a judge a populated workbench.
+- **A report that is honest about its own numbers.** A drain rate derived from the
+  battery charge level is printed with its resolution attached, because a 30 mAh
+  granularity is not a two-decimal measurement. A finding with no traced chain
+  says so instead of omitting the chain. The 23-rule coverage matrix shows the
+  rules that found nothing, as zeros. This is aimed at an expert reader, and the
+  fastest way to lose one is a number they cannot trust.
 
-The fix generator makes the findings immediately actionable, the ADB integration
-ties the static analysis to real runtime behaviour, and the scan-history store
-turns a one-shot analysis into a continuous improvement loop.
+The fix generator makes findings actionable, the ADB integration ties the static
+analysis to real runtime behaviour, and the scan history turns a one-shot
+analysis into a loop with a number attached.
 
 **This is not a demo. This is a tool Android developers would actually install.**
 

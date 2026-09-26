@@ -9,10 +9,12 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "report:fonts": "node tools/embed-report-fonts.mjs",
+    "deck": "node docs/deck/render.mjs",
     "tauri": "tauri"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.5",
+    "playwright": "^1.63.0",
     "sass": "^1.105.0",
     "typescript": "^5.4.5",
     "vite": "^5.3.1"

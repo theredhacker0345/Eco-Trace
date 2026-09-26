@@ -77,12 +77,25 @@ export interface WriteReportOptions {
  *
  * Returns the path written, or null when the user cancelled.
  */
+/**
+ * Writes the report and opens it in the way the format calls for.
+ *
+ * Returns the path written, or null when the user cancelled. In a browser —
+ * that is, in the hosted demo — there is no filesystem and no save dialog, so
+ * the document is delivered as a download instead and null is returned only if
+ * the download itself is unavailable.
+ */
 export async function writeReport(
   options: WriteReportOptions
 ): Promise<string | null> {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    return downloadInBrowser(options.html, `${options.suggestedName}.html`);
+  }
+
   const extension = options.format;
 
-  const target =    options.target ??
+  const target =
+    options.target ??
     (await saveDialog({
       title: `Export EcoTrace report as ${extension.toUpperCase()}`,
       defaultPath: `${options.suggestedName}.${extension}`,
@@ -98,6 +111,32 @@ export async function writeReport(
 
   await writeTextFile(target, options.html);
   return target;
+}
+
+/**
+ * Delivers a string as a file download.
+ *
+ * The demo has no filesystem, and the report is worthless if it cannot leave
+ * the browser, so the hosted build uses an object URL and a synthetic click.
+ * The URL is revoked on the next tick rather than immediately: revoking it
+ * synchronously can cancel the download before the browser has read the blob.
+ */
+function downloadInBrowser(html: string, filename: string): string | null {
+  try {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return filename;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -201,6 +240,10 @@ async function waitForFonts(doc: Document): Promise<void> {
  * a failure of the export, which has already written the file by this point.
  */
 export async function revealReport(path: string): Promise<void> {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    // Already downloaded by `writeReport`; nothing to hand off to the OS.
+    return;
+  }
   try {
     await openWithSystem(path);
   } catch {

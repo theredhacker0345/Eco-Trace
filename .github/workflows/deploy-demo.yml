@@ -1,0 +1,82 @@
+# Publishes the hosted demo to GitHub Pages.
+#
+# The demo is the same build the desktop app ships: outside the Tauri shell it
+# mounts the bundled sample project and runs the real detector set over it. So
+# there is no separate demo codebase to keep in sync — this just uploads dist/.
+#
+# Enabled from the repository's Settings → Pages → Source: "GitHub Actions".
+# The published URL appears in the workflow summary after the first run.
+#
+# If you would rather use Vercel, no config is needed either: import the repo,
+# accept the framework preset, and it will detect Vite. This workflow is the
+# zero-friction path, because it needs no account beyond the one you already
+# push to.
+
+name: Deploy demo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - ".github/workflows/deploy-demo.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a deploy that is already publishing: a half-written Pages
+# artifact is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Assert the demo actually mounted
+        # A deploy that serves an empty workbench is worse than no deploy: the
+        # whole point of the hosted build is that a judge sees findings without
+        # installing anything. The bundle is checked here so a regression fails
+        # the build rather than shipping a blank page to the submission form.
+        run: |
+          test -f dist/index.html
+          grep -q "cx-demo-banner" dist/index.html
+          grep -q "AutoTrack" dist/assets/*.js
+          echo "demo bundle contains the banner and the bundled sample"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

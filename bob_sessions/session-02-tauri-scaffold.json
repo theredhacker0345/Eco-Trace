@@ -1,4 +1,5 @@
-﻿﻿﻿{
+{
+  "_provenance": "Hand-written summary of an IBM Bob 2.0 build session, authored for this repository. This is NOT a machine export from Bob. To substitute a real export, delete this file and replace it with the output of Bob's session export. See bob_sessions/README.md.",
   "session": "02",
   "title": "Tauri 2.0 Windows Project Scaffold",
   "model": "IBM Bob 2.0",
@@ -36,4 +37,3 @@
   ],
   "build_result": "SUCCESS - ecotrace.exe compiled at C:/ecotrace_target/release/ecotrace.exe (MSI bundle skipped - WiX download not needed for development)"
 }
-

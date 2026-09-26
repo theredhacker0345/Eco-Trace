@@ -14,6 +14,11 @@ export default defineConfig({
     // to the build that produced it.
     __ECOTRACE_VERSION__: JSON.stringify(pkg.version ?? "0.0.0"),
   },
+  // Relative asset paths, so one build output is deployable anywhere: the
+  // Tauri bundle, a GitHub Pages subpath, Vercel, Netlify, or opened straight
+  // off disk. The absolute default ("/assets/...") would 404 everywhere except
+  // a domain root, which is a confusing failure to debug on a deploy.
+  base: "./",
   server: {
     port: 5173,
     strictPort: true,

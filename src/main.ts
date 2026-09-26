@@ -197,19 +197,35 @@ async function boot(): Promise<void> {
  * build.
  */
 async function mountBrowserPreviewIfNeeded(): Promise<void> {
-  if (!import.meta.env.DEV) return;
-  const { isBrowserPreview, mountPreview } = await import("./ui/preview.js");
-  if (!isBrowserPreview()) return;
+  // Replaced by demo mode. This used to be gated on `import.meta.env.DEV`, which
+  // meant a hosted build opened onto an empty workbench: every panel rendered
+  // and none of them had anything to show. Demo mode is a runtime decision
+  // about the shell, not a build-time one, so the same bundle serves the
+  // desktop app and the hosted demo.
+  if ("__TAURI_INTERNALS__" in window) return;
   try {
-    await mountPreview();
+    const { mountDemoMode, rewireDemoAnalyze } = await import("./ui/demo.js");
+    await mountDemoMode();
+    rewireDemoAnalyze();
   } catch (err) {
-    log("system", `Browser preview unavailable: ${String(err)}`);
+    log("system", `Demo mode unavailable: ${String(err)}`);
   }
 }
 
-void mountBrowserPreviewIfNeeded();
-
-void boot();
+/*
+ * Boot first, then decide whether this is a hosted demo.
+ *
+ * The order matters. Both are async, and `boot()` wires the keymap, the table,
+ * the palette and the panel subscriptions. Seeding demo state before that
+ * finishes lets boot's later initialisation overwrite the selection demo mode
+ * just chose, which showed up as the workbench opening on an arbitrary finding
+ * instead of the deep causal chain. Sequencing them removes the race instead of
+ * racing and hoping.
+ */
+void (async () => {
+  await boot();
+  await mountBrowserPreviewIfNeeded();
+})();
 
 // ---------------------------------------------------------------------------
 // Header
@@ -1097,6 +1113,8 @@ function buildReportHtml(): string {
 async function exportReport(): Promise<void> {
   if (!reportReady()) return;
 
+  const hosted = !("__TAURI_INTERNALS__" in window);
+
   try {
     setBusy("Building report");
     const html = buildReportHtml();
@@ -1115,11 +1133,11 @@ async function exportReport(): Promise<void> {
     notify(
       "success",
       "Report exported",
-      "A self-contained HTML file. It needs no network access and prints to PDF from the browser."
+      hosted
+        ? "Downloaded as a self-contained HTML file — it needs no network access and prints to PDF from any browser."
+        : "A self-contained HTML file. It needs no network access and prints to PDF from the browser."
     );
-    await revealReport(target).catch(() => {
-      // Not being able to launch the default handler is not an export failure.
-    });
+    await revealReport(target);
   } catch (err) {
     log("system", `Export failed: ${String(err)}`);
     notify("error", "Export failed", String(err));
@@ -1164,6 +1182,19 @@ async function exportPdf(): Promise<void> {
  */
 async function openReportInBrowser(): Promise<void> {
   if (!reportReady()) return;
+
+  // In a hosted build there is nothing to hand off to: the browser the report
+  // is already in *is* the browser to open it in, and "export report" already
+  // produces a downloadable copy. Sending a judge to an empty new tab would be
+  // worse than saying so.
+  if (!("__TAURI_INTERNALS__" in window)) {
+    notify(
+      "info",
+      "Already in a browser",
+      "Use “Export report” to download it — the file opens in any browser, and the same page has a Save as PDF button."
+    );
+    return;
+  }
 
   try {
     setBusy("Building report");

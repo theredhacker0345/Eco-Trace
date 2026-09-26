@@ -14,12 +14,89 @@
 
 .cx-shell {
   display: grid;
-  grid-template-rows: var(--cx-shell-header-h) 1fr var(--cx-statusbar-h);
+
+  // Four rows, but the banner row is only occupied in a hosted build. The
+  // three persistent children are placed by explicit row rather than by
+  // auto-placement, so hiding the banner collapses row 2 to zero without
+  // shifting the work surface up into it.
+  grid-template-rows: var(--cx-shell-header-h) auto 1fr var(--cx-statusbar-h);
+
   height: 100vh;
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
   background: var(--cx-surface-app);
+}
+
+.cx-shell__header {
+  grid-row: 1;
+}
+
+.cx-shell__body {
+  grid-row: 3;
+}
+
+.cx-statusbar {
+  grid-row: 4;
+}
+
+// ===========================================================================
+// Demo banner
+//
+// Shown only by the hosted build. Its job is to be unmissable: a visitor who
+// does not realise they are looking at a sample project will read the findings
+// as a claim about their own repository.
+// ===========================================================================
+
+.cx-demo-banner {
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-3, 8px);
+  flex-wrap: wrap;
+  padding: var(--cx-space-2, 4px) var(--cx-space-5, 16px);
+  background: var(--cx-layer-01, #262626);
+  border-bottom: 1px solid var(--cx-layer-03, #525252);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--cx-text-secondary, #c6c6c6);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.cx-demo-banner__tag {
+  flex: none;
+  padding: 0 var(--cx-space-3, 8px);
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  background: var(--cx-support-info, #0f62fe);
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 0.32px;
+}
+
+.cx-demo-banner__text {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.cx-demo-banner__text code {
+  font-family: var(--cx-font-mono, monospace);
+  color: var(--cx-text-primary, #f4f4f4);
+}
+
+.cx-demo-banner__cta {
+  flex: none;
+  color: var(--cx-link-primary, #78a9ff);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+
+  &:hover {
+    color: var(--cx-link-primary-hover, #a6c8ff);
+  }
 }
 
 // ===========================================================================

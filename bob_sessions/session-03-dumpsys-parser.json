@@ -1,4 +1,5 @@
-﻿﻿﻿{
+{
+  "_provenance": "Hand-written summary of an IBM Bob 2.0 build session, authored for this repository. This is NOT a machine export from Bob. To substitute a real export, delete this file and replace it with the output of Bob's session export. See bob_sessions/README.md.",
   "session": "03",
   "title": "ADB dumpsys batterystats Parser",
   "model": "IBM Bob 2.0",
@@ -16,7 +17,9 @@
     "computeDelta() - before/after subtraction, drain rate calculation"
   ],
   "bob_reasoning": "dumpsys batterystats output is semi-structured. Key insight: sections are identified by indented header lines, not by consistent delimiters. Each section parser uses line-by-line regex rather than a parser combinator. All parsing is defensive (try/catch per section) because real-world dumpsys output varies across Android versions (8 through 14). The computeDelta function uses a 3000mAh default battery capacity - conservative enough to avoid overestimating drain on modern devices.",
-  "files_created": ["src/parser/dumpsys.ts"],
+  "files_created": [
+    "src/parser/dumpsys.ts"
+  ],
   "exports": [
     "parseDumpsys",
     "computeDelta",
@@ -29,4 +32,3 @@
     "CpuWakeup"
   ]
 }
-

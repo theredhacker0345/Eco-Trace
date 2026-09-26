@@ -150,6 +150,16 @@
   <!-- ═════════════════════════════════════════════════════════════════════
        Work surface — three panes, keyboard-operable splitters
        ═════════════════════════════════════════════════════════════════════ -->
+  <!-- Hosted-demo banner. Present in every build so the shell grid does not
+       change shape between the desktop app and the demo; src/ui/demo.ts fills
+       and reveals it only when running outside the Tauri shell. -->
+  <div id="demo-banner" class="cx-demo-banner" role="status" hidden>
+    <span class="cx-demo-banner__tag">Demo mode</span>
+    <span class="cx-demo-banner__text"></span>
+    <a class="cx-demo-banner__cta" href="https://github.com/theredhacker0345/Eco-Trace/releases"
+       target="_blank" rel="noreferrer">Get the desktop app</a>
+  </div>
+
   <div id="workbench" class="cx-shell__body">
 
     <!-- ── Project navigator ─────────────────────────────────────────── -->
@@ -557,9 +567,12 @@
               <svg class="cx-empty__art"><use href="#i-flow" /></svg>
               <span class="cx-empty__title">No chain resolved</span>
               <p class="cx-empty__body">
-                A chain is traced for critical findings once the call graph
-                reaches an architectural entry point. Configure an IBM Bob key
-                to have it traced across every file at once.
+                A chain is traced whenever the call graph reaches an
+                architectural entry point &mdash; an activity, service or
+                receiver lifecycle method. This finding sits in a method nothing
+                else calls, so there is no path back to trace. That usually
+                means the defect is local rather than architectural, and can be
+                fixed where it is.
               </p>
             </div>
           </div>

@@ -1009,28 +1009,49 @@ export function traceCallChain(
   for (let hop = 0; hop < maxHops; hop++) {
     const edges = callGraph.callers.get(current) ?? [];
     if (edges.length === 0) break;
-    // Pick the most interesting caller (lifecycle root first, else first edge)
-    const lifecycleEdge = edges.find((e) =>
-      LIFECYCLE_ROOTS.has(e.callerMethod)
-    );
-    const edge = lifecycleEdge ?? edges[0];
+
+    /*
+     * A method's own definition site is recorded as a call to itself, so the
+     * edge list for any method leads with a self-reference. Choosing it trips
+     * the `visited` guard on the very first hop and ends the walk, which is
+     * why the tracer used to return a single node for almost every finding:
+     * the edge that could have continued the chain was never a candidate,
+     * because the one it did choose was always itself.
+     */
+    const candidates = edges.filter((e) => e.callerMethod !== current);
+    if (candidates.length === 0) break;
+
+    // Prefer a lifecycle root, so the chain terminates at an architectural
+    // decision point rather than wherever the walk happens to run out.
+    const lifecycleEdge = candidates.find((e) => LIFECYCLE_ROOTS.has(e.callerMethod));
+    const edge = lifecycleEdge ?? candidates[0];
     if (visited.has(edge.callerMethod)) break;
     visited.add(edge.callerMethod);
 
-    const isRoot =
-      LIFECYCLE_ROOTS.has(edge.callerMethod) || hop === maxHops - 1;
+    const isRoot = LIFECYCLE_ROOTS.has(edge.callerMethod) || hop === maxHops - 1;
     chain.unshift({
       file: edge.callerFile,
       method: edge.callerMethod,
       line: edge.callerLine,
       role: isRoot ? "root" : "intermediate",
       description: isRoot
-        ? `Architectural decision point — this is where the drain chain originates.`
+        ? `Architectural decision point - this is where the drain chain originates.`
         : `Calls ${current}`,
     });
 
     if (isRoot) break;
     current = edge.callerMethod;
+  }
+
+  // The walk can also end by running out of callers rather than by reaching a
+  // lifecycle root. Leaving every node marked "intermediate" would render a
+  // chain with no origin, which reads as a broken diagram rather than as an
+  // honest one, so the outermost node is promoted and says why it is there.
+  if (chain.length > 1 && !chain.some((node) => node.role === "root")) {
+    chain[0].role = "root";
+    chain[0].description =
+      "Outermost caller the call graph could reach for this finding. " +
+      "Nothing above it invokes the method, so the defect is entered from here.";
   }
 
   return chain;
