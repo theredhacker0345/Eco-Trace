@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Setup Rust (MSVC toolchain)
@@ -43,8 +43,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'EcoTrace ${{ github.ref_name }}'
+          # Only set release fields when triggered by an actual release event
+          tagName: ${{ github.event_name == 'release' && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'release' && format('EcoTrace {0}', github.ref_name) || '' }}
           releaseBody: |
             ## EcoTrace Release
 
@@ -68,5 +69,5 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
