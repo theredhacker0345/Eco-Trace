@@ -28,8 +28,21 @@
 
 <br/>
 
+<p align="center">
+  <img src="docs/screenshots/workbench.png" alt="EcoTrace workbench: 18 findings across 17 sources, with the four-hop causal chain open in the inspector, traced from NetworkManager.fetchUserProfile back to SyncService.onStartCommand" width="100%">
+</p>
+
+<p align="center"><sub>
+The hosted demo, unmodified. It opens on the deepest chain in the scan rather than the
+first finding, because the chain is the reason the tool exists. Click the tree to scope the
+table, the tabs to switch between rule, chain and fix, or <b>Export report</b> for the PDF.
+</sub></p>
+
+<br/>
+
 [Download EXE](https://github.com/theredhacker0345/Eco-Trace/releases) &nbsp;|&nbsp;
 [Live demo](#live-demo) &nbsp;|&nbsp;
+[Screenshots](#screenshots) &nbsp;|&nbsp;
 [Build from Source](#build-from-source) &nbsp;|&nbsp;
 [How It Works](#how-it-works) &nbsp;|&nbsp;
 [The Report](#the-report) &nbsp;|&nbsp;
@@ -250,6 +263,47 @@ against a memory. The same series is written into the exported report's
 
 ---
 
+## Screenshots
+
+Every image below was captured from the **deployed** demo by
+`npm run screenshots`, not from a local build and not mocked up. A screenshot
+of the deployment is evidence the deployment works, and it cannot accidentally
+depict a state the published site cannot reach.
+
+Regenerate with:
+
+```bash
+npm run screenshots        # reads the live demo, overwrites docs/screenshots/
+```
+
+The script fails loudly if a report section stops rendering, which is not
+hypothetical — it is how the report exporter was caught reading a chain map that
+the demo path never populated, which left the exported document missing its
+headline section while the inspector on screen showed the chain perfectly.
+
+<details>
+<summary><strong>Findings expanded — every defect with its offending source</strong></summary>
+
+<img src="docs/screenshots/findings-expanded.png" alt="Findings table with every row expanded, each showing the rule, the severity, the source snippet and the trace hint" width="100%">
+
+</details>
+
+<details>
+<summary><strong>Command palette — <code>Ctrl+K</code> over every action</strong></summary>
+
+<img src="docs/screenshots/command-palette.png" alt="Command palette open with the query 'export', listing export, export PDF and open-in-browser with their keyboard accelerators" width="100%">
+
+</details>
+
+<details>
+<summary><strong>White theme — one of three Carbon themes</strong></summary>
+
+<img src="docs/screenshots/theme-white.png" alt="The same workbench in Carbon's white theme, showing that the entire palette is a token swap" width="100%">
+
+</details>
+
+---
+
 ## Interface
 
 The workbench is built on the **IBM Carbon Design System** — IBM's own design
@@ -322,6 +376,28 @@ numbers.
 | **Export report** | `Ctrl+E` | Standalone HTML — attach to a ticket, commit, archive. No network needed. |
 | **PDF** | `Ctrl+Shift+E` | PDF via the print dialog |
 | **Open in browser** | `Ctrl+Shift+P` | The default browser, with its own print controls |
+
+<p align="center">
+  <img src="docs/screenshots/report-masthead.png" alt="Report cover: grade ring, verdict paragraph, ranked plan and score breakdown" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/report-plan.png" alt="The report's ranked plan: the six most severe findings ordered by what to fix first, each with its location and why it matters" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/report-chain.png" alt="The report's causal chain section, rendering the four-hop path from root cause onStartCommand down to the symptom fetchUserProfile" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/report-coverage.png" alt="The 23-rule coverage matrix, showing every detector and what each found, including the rules that found nothing" width="100%">
+</p>
+
+<p align="center"><sub>
+These three are pages of the report the hosted demo exports, at
+<a href="https://theredhacker0345.github.io/Eco-Trace/">the live demo</a>. The full
+document is 13 A4 pages.
+</sub></p>
 
 The PDF is produced by handing the document to the host's print pipeline and
 choosing **Microsoft Print to PDF** or **Save as PDF**. That is deliberate:

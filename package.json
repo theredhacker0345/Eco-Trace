@@ -12,6 +12,7 @@
     "deck": "node docs/deck/render.mjs",
     "icons": "node tools/render-icons.mjs && tauri icon src-tauri/icons/icon-source.png",
     "workflow:lint": "node tools/lint-workflows.mjs",
+    "screenshots": "node tools/capture-screenshots.mjs",
     "tauri": "tauri"
   },
   "devDependencies": {
