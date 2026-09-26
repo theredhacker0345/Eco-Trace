@@ -1,0 +1,761 @@
+// ============================================================================
+// Work surface — findings table, run log, scan summary
+//
+// Component anatomy follows the Carbon data table:
+//
+//   1. title + description      what the table contains, sentence case
+//   2. toolbar                  search, sort, scope, bulk actions
+//   3. column header            sortable, aria-sort announced
+//   4. table row                40px (lg), expandable to a detail region
+//   5. summary bar              live rollup + the weighted sub-scores
+//
+// The expandable row is where a finding becomes legible: the description, the
+// offending source line, and the trace hint sit directly under the row rather
+// than in a distant panel, so triage does not require cross-panel chasing.
+// ============================================================================
+
+.cx-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.cx-surface[hidden] {
+  display: none;
+}
+
+// ===========================================================================
+// 1. Title + description
+// ===========================================================================
+
+.cx-surface__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cx-space-lg);
+  padding: var(--cx-space-md) var(--cx-space-lg) var(--cx-space-sm);
+  flex: none;
+}
+
+.cx-surface__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cx-surface__title {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 400;
+  letter-spacing: -0.1px;
+  color: var(--cx-text-primary);
+}
+
+.cx-surface__desc {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-surface__tally {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  flex: none;
+  padding-top: var(--cx-space-2xs);
+}
+
+.cx-surface__tally[hidden] {
+  display: none;
+}
+
+// ===========================================================================
+// 2. Toolbar
+// ===========================================================================
+
+.cx-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-sm);
+  height: var(--cx-panel-header-h);
+  padding: 0 var(--cx-space-lg);
+  border-top: 1px solid var(--cds-border-subtle-00);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  background: var(--cds-layer-01);
+  flex: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cx-toolbar::-webkit-scrollbar {
+  height: 0;
+}
+
+.cx-toolbar__search {
+  width: 240px;
+  flex: none;
+}
+
+.cx-toolbar__spacer {
+  flex: 1;
+  min-width: var(--cx-space-xs);
+}
+
+.cx-toolbar__result {
+  flex: none;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// ===========================================================================
+// 3–4. Table
+// ===========================================================================
+
+.cx-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cx-table-wrap:focus-visible {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -2px;
+}
+
+.cx-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.cx-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: var(--cx-row-h);
+  padding: 0 var(--cx-space-md);
+  background: var(--cds-layer-02);
+  border-bottom: 1px solid var(--cds-border-strong-01);
+  color: var(--cds-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.32px;
+  text-align: left;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.cx-table th.cx-table__sortable {
+  cursor: pointer;
+}
+
+.cx-table th.cx-table__sortable:hover {
+  background: var(--cds-layer-accent-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+}
+
+.cx-table__sort > svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  opacity: 0;
+}
+
+.cx-table th[aria-sort='ascending'] .cx-table__sort > svg,
+.cx-table th[aria-sort='descending'] .cx-table__sort > svg {
+  opacity: 1;
+  fill: var(--cds-interactive);
+}
+
+.cx-table th[aria-sort='ascending'] .cx-table__sort > svg {
+  transform: rotate(180deg);
+}
+
+.cx-table tbody tr {
+  background: var(--cx-surface-app);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+}
+
+.cx-table tbody tr[data-clickable='true'] {
+  cursor: pointer;
+}
+
+.cx-table tbody tr[data-clickable='true']:hover {
+  background: var(--cds-layer-hover-01);
+}
+
+.cx-table tbody tr[data-current='true'] {
+  background: var(--cds-layer-selected-01);
+  box-shadow: inset 2px 0 0 var(--cds-interactive);
+}
+
+.cx-table td {
+  height: var(--cx-row-h);
+  padding: 0 var(--cx-space-md);
+  background: transparent;
+  color: var(--cx-text-primary);
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+.cx-table__col-expand {
+  width: 40px;
+  padding: 0 !important;
+  text-align: center;
+}
+
+.cx-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cx-row-h-sm);
+  height: var(--cx-row-h-sm);
+  margin: 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--cx-text-placeholder);
+  cursor: pointer;
+  transition: transform var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-expand > svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.cx-expand:hover {
+  color: var(--cx-text-primary);
+  background: var(--cds-layer-hover-01);
+}
+
+.cx-expand[aria-expanded='true'] {
+  transform: rotate(90deg);
+  color: var(--cds-interactive);
+}
+
+.cx-cell-sev {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+}
+
+.cx-cell-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cx-cell-name__title {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--cx-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-cell-name__meta {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--cx-text-placeholder);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-cell-id {
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--cds-text-secondary);
+}
+
+.cx-cell-loc {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cx-space-2xs);
+  min-width: 0;
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+  color: var(--cds-text-secondary);
+}
+
+.cx-cell-loc__file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  // Keeps the filename visible when a long path overflows its column.
+  direction: rtl;
+  text-align: left;
+}
+
+.cx-cell-loc__line {
+  flex: none;
+  color: var(--cx-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-cell-cat {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cds-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Expandable detail region.
+.cx-table tr.cx-table__detail > td {
+  height: auto;
+  padding: 0;
+  background: var(--cds-layer-01);
+}
+
+.cx-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--cx-space-lg);
+  padding: var(--cx-space-md) var(--cx-space-lg) var(--cx-space-lg) 56px;
+  border-left: 2px solid var(--cds-border-subtle-00);
+}
+
+.cx-detail__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-xs);
+  min-width: 0;
+}
+
+.cx-detail__label {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-detail__label > svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.cx-detail__text {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cds-text-secondary);
+  max-width: 68ch;
+}
+
+.cx-detail__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1180px) {
+  .cx-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+// ===========================================================================
+// Code block
+//
+// Source rendering uses Carbon's syntax token set so that a finding's snippet
+// and its generated fix read as code rather than as coloured prose. Line
+// numbers are decorative and hidden from assistive technology, which should
+// hear the code once.
+// ===========================================================================
+
+.cx-code {
+  position: relative;
+  margin: 0;
+  padding: var(--cx-space-sm) var(--cx-space-md);
+  background: var(--cds-layer-01);
+  border-left: 2px solid var(--cds-border-strong-01);
+  overflow-x: auto;
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--cds-text-primary);
+  tab-size: 4;
+  white-space: pre;
+  counter-reset: cx-line;
+}
+
+.cx-code--fix {
+  border-left-color: var(--cds-support-success);
+}
+
+.cx-code--snippet {
+  border-left-color: var(--cx-critical);
+}
+
+.cx-code--gutter {
+  padding-left: calc(var(--cx-space-lg) + 32px);
+}
+
+.cx-code__line {
+  display: block;
+  counter-increment: cx-line;
+}
+
+.cx-code__line::before {
+  content: counter(cx-line);
+  position: absolute;
+  left: 0;
+  width: 40px;
+  text-align: right;
+  color: var(--cds-text-placeholder);
+  user-select: none;
+}
+
+.cx-code__line--empty {
+  min-height: 20px;
+}
+
+// ===========================================================================
+// 5. Summary bar
+// ===========================================================================
+
+.cx-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-lg);
+  min-height: var(--cx-panel-header-h);
+  padding: var(--cx-space-xs) var(--cx-space-lg);
+  border-top: 1px solid var(--cds-border-subtle-00);
+  background: var(--cds-layer-01);
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.cx-summary[hidden] {
+  display: none;
+}
+
+.cx-summary__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cx-space-2xs);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+  white-space: nowrap;
+}
+
+.cx-summary__value {
+  font-family: var(--cx-font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cx-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-summary__item--critical .cx-summary__value {
+  color: var(--cx-critical);
+}
+
+.cx-summary__item--high .cx-summary__value {
+  color: var(--cx-high);
+}
+
+.cx-summary__item--medium .cx-summary__value {
+  color: var(--cx-medium);
+}
+
+// Sub-score meters: one per weighted component of the composite grade.
+.cx-subscores {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-md);
+  margin-left: auto;
+}
+
+.cx-subscores[hidden] {
+  display: none;
+}
+
+.cx-subscore {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-3xs);
+  width: 108px;
+}
+
+.cx-subscore__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--cx-space-xs);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-subscore__label {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cx-subscore__value {
+  font-family: var(--cx-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cds-text-secondary);
+}
+
+.cx-subscore__track {
+  height: 4px;
+  background: var(--cds-layer-accent-01);
+  overflow: hidden;
+}
+
+.cx-subscore__fill {
+  height: 100%;
+  background: var(--cds-support-success);
+  transition: width var(--cx-duration-slow) var(--cx-ease-productive);
+}
+
+.cx-subscore__fill[data-band='mid'] {
+  background: var(--cx-medium);
+}
+
+.cx-subscore__fill[data-band='low'] {
+  background: var(--cx-critical);
+}
+
+.cx-subscore__weight {
+  font-family: var(--cx-font-mono);
+  opacity: 0.7;
+}
+
+// ===========================================================================
+// Run log
+//
+// The reasoning stream is genuinely useful during a scan and noise after one,
+// so it is a first-class view rather than a permanent sidebar. The console is
+// monospaced with a level gutter, a filter row, autoscroll that yields to
+// manual scrolling, and a copy action — the three things a log needs to be
+// worth reading.
+// ===========================================================================
+
+.cx-log {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.cx-log__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-sm);
+  height: var(--cx-panel-header-h);
+  padding: 0 var(--cx-space-lg);
+  border-top: 1px solid var(--cds-border-subtle-00);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  background: var(--cds-layer-01);
+  flex: none;
+}
+
+.cx-log__stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--cx-space-xs) 0 var(--cx-space-lg);
+  background: var(--cds-layer-01);
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.cx-log__line {
+  display: grid;
+  grid-template-columns: 72px 96px minmax(0, 1fr);
+  gap: var(--cx-space-sm);
+  padding: 1px var(--cx-space-lg);
+  border-left: 2px solid transparent;
+  color: var(--cds-text-secondary);
+  animation: cx-log-in var(--cx-duration-quick) var(--cx-ease-entrance) both;
+}
+
+@keyframes cx-log-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.cx-log__line:hover {
+  background: var(--cds-layer-hover-01);
+}
+
+.cx-log__time {
+  color: var(--cds-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-log__level {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cds-text-placeholder);
+}
+
+.cx-log__msg {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cx-log__line[data-level='critical'] {
+  border-left-color: var(--cx-critical);
+}
+
+.cx-log__line[data-level='critical'] .cx-log__level,
+.cx-log__line[data-level='critical'] .cx-log__msg {
+  color: var(--cx-critical);
+}
+
+.cx-log__line[data-level='high'] {
+  border-left-color: var(--cx-high);
+}
+
+.cx-log__line[data-level='high'] .cx-log__level,
+.cx-log__line[data-level='high'] .cx-log__msg {
+  color: var(--cx-high);
+}
+
+.cx-log__line[data-level='medium'] {
+  border-left-color: var(--cx-medium);
+}
+
+.cx-log__line[data-level='medium'] .cx-log__level,
+.cx-log__line[data-level='medium'] .cx-log__msg {
+  color: var(--cx-medium);
+}
+
+.cx-log__line[data-level='success'] {
+  border-left-color: var(--cx-support-success);
+}
+
+.cx-log__line[data-level='success'] .cx-log__level,
+.cx-log__line[data-level='success'] .cx-log__msg {
+  color: var(--cx-support-success);
+}
+
+.cx-log__line[data-level='info'] {
+  border-left-color: var(--cds-border-strong-01);
+}
+
+.cx-log__line[data-level='info'] .cx-log__level {
+  color: var(--cds-link-primary);
+}
+
+.cx-log__line[data-level='system'] .cx-log__msg {
+  color: var(--cds-text-placeholder);
+  font-style: italic;
+}
+
+.cx-log__ref {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 11px;
+  color: var(--cds-link-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.cx-log__ref:hover {
+  text-decoration: underline;
+}
+
+.cx-log__ref > svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.cx-log__empty {
+  padding: var(--cx-space-2xl) var(--cx-space-lg);
+  text-align: center;
+  font-family: var(--cx-font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cds-text-placeholder);
+}
+
+// ===========================================================================
+// History
+//
+// A slide-over listing previous scans with their score delta. Surfaces an
+// existing capability (grade.ts persists history) that no earlier view exposed.
+// ===========================================================================
+
+.cx-history__row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--cx-space-sm);
+  padding: var(--cx-space-xs) var(--cx-space-lg);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  font-size: 12px;
+}
+
+.cx-history__row:hover {
+  background: var(--cds-layer-hover-01);
+}
+
+.cx-history__date {
+  color: var(--cds-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-history__path {
+  font-family: var(--cx-font-mono);
+  color: var(--cds-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-history__delta {
+  font-family: var(--cx-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cds-text-placeholder);
+}
+
+.cx-history__delta[data-dir='up'] {
+  color: var(--cx-support-success);
+}
+
+.cx-history__delta[data-dir='down'] {
+  color: var(--cx-critical);
+}

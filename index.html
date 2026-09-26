@@ -1,359 +1,895 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="g100">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
   <title>EcoTrace — Android Energy Intelligence</title>
-  <link rel="stylesheet" href="/src/ui/styles.css" />
 </head>
 <body>
 
-<div id="app">
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Icon sprite
 
-  <!-- ── Title bar ──────────────────────────────────────────────────────── -->
-  <div id="titlebar">
-    <span class="logo">
-      <svg class="logo-svg" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M11 2L3 11h7l-1 7 8-9h-7l1-7z" fill="currentColor"/>
-      </svg>
-      <span class="logo-text">EcoTrace</span>
-    </span>
-    <span class="title-sep"></span>
-    <span class="tagline">Android Energy Intelligence</span>
-    <div class="spacer"></div>
-    <button id="btn-open-project">
-      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="13" height="13" style="flex-shrink:0">
-        <path d="M1.5 3.5A1 1 0 0 1 2.5 2.5h4l1.5 1.5H13.5A1 1 0 0 1 14.5 5v7a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3.5z" stroke="currentColor" stroke-width="1.2"/>
-      </svg>
-      Open Project
-    </button>
-  </div>
+     One symbol per glyph, referenced with <use>. A sprite keeps the document
+     small, guarantees a single definition per icon, and means icons stay
+     crisp and themeable through `fill: currentColor` — the same mechanism
+     Carbon uses for its icon set. All glyphs are drawn on a 16×16 grid so
+     they optically align with 14px and 12px text.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <symbol id="i-logo" viewBox="0 0 16 16"><path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M6.8 1.2a5.6 5.6 0 1 1 0 11.2 5.6 5.6 0 0 1 0-11.2zm0 1.5a4.1 4.1 0 1 0 0 8.2 4.1 4.1 0 0 0 0-8.2zM10.7 11.3l1-1 3.2 3.2-1 1z"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 16 16"><path d="M8.6 3.2 7.2 4.6 10.4 8l-3.2 3.4 1.4 1.4L13.2 8z"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 16 16"><path d="M7.4 3.2 12.8 8l-5.4 4.8-1.4-1.4L9.8 8 6 4.6z"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 16 16"><path d="M3.2 7.4 4.6 6 8 9.4 11.4 6l1.4 1.4L8 12.8z"/></symbol>
+    <symbol id="i-chevron-up" viewBox="0 0 16 16"><path d="M3.2 8.6 8 3.2l4.8 5.4-1.4 1.4L8 6.6 4.6 10z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.4 4.1A1.7 1.7 0 0 1 3.1 2.4h2.7l1.5 1.8h5.6a1.7 1.7 0 0 1 1.7 1.7v6.4a1.7 1.7 0 0 1-1.7 1.7H3.1a1.7 1.7 0 0 1-1.7-1.7z"/></symbol>
+    <symbol id="i-code" viewBox="0 0 16 16"><path d="M6 3.4 1.4 8 6 12.6l1.3-1.3L3.9 8l3.4-3.3zM10 3.4l1.3 1.3L12.1 8l-3.4 3.3L10 12.6 14.6 8z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M3.4 1.4h6l3.2 3.2v10H3.4zm1.5 1.5v10.2h6V5.6H8.4V2.9z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 16 16"><path d="M1 2.9h14v1.7H1zM1 7.15h14v1.7H1zM1 11.4h14v1.7H1zM3.6 1.6h2.1v4.3H3.6zM8.5 5.85h2.1v4.3H8.5zM5.8 9.1h2.1v4.3H5.8z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M7.25 1.4h1.5v6.1l2.4-2.4 1.06 1.06L8 10.36 3.79 6.16 4.85 5.1l2.4 2.4zM1.4 11.2h3.1v1.5h7v-1.5h3.1v3.2H1.4z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M4.2 2.3 13 8l-8.8 5.7z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 16 16"><path d="M3.4 3.4h9.2v9.2H3.4z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><path d="M5.6 1.4h9v9h-1.5V2.9H5.6zM1.4 5.1h9v9.5h-9z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M7.4 12.6 1.3 6.5l1.4-1.4 4.7 4.7L13.3 3l1.4 1.4z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M8 6.6 12.9 1.7l1.4 1.4L9.4 8l4.9 4.9-1.4 1.4L8 9.4l-4.9 4.9-1.4-1.4L6.6 8 1.7 3.1l1.4-1.4z"/></symbol>
+    <symbol id="i-warning" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1.1 15.6 14.6H.4zm-.7 4.5v4.6h1.5V5.6zm0 5.7v1.5h1.5v-1.5z"/></symbol>
+    <symbol id="i-error" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm-.75 3.4h1.5v5.1h-1.5zm0 6.2h1.5v1.5h-1.5z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm-.75 2.5H9.75V5H7.25zm0 3.1h1.5V12h-1.5z"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm3.5 4.3-1.1 1.1-2.9 2.9-1.8-1.8-1.1 1.1 2.9 2.9 4-4z"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 16 16"><path d="M8 0.4 11 3.9H5zM7 2.9h2v10.2H7zM8 15.6 5 12.1h6z"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 16 16"><path d="M1 2.4h14L9.4 9v5.3L6.6 16V9z"/></symbol>
+    <symbol id="i-table" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.4 2.4h13.2v11.2H1.4zm1.5 1.5v2h10v-2zm0 3.5v1.5h10V7.4zm0 3v1h10v-1z"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.4 2.4h13.2v11.2H1.4zm1.5 1.5v1.5h1.5V3.9zm2.6 0v1.5h1.5V3.9zm2.6 0v1.5h1.5V3.9zM2.9 7.4v1.5h1.5V7.4zm2.2 0v1.5h5.6V7.4z"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 16 16"><path d="M.8 7.4h2.6L5.4 2.6l3.1 10.4 1.9-5.6h4.8V5.9H11.5L8.7 13.5 5.4 3.2l-1 4.2H.8z"/></symbol>
+    <symbol id="i-battery" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M3.4 2.9h7.2v1.6h1.9v7H10.6v1.6H3.4zm2 3.6v3.4h4.1V6.5z"/></symbol>
+    <symbol id="i-device" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M3.4 1.4h9.2v13.2H3.4zm1.5 1.5v10.2h6.2V2.9z"/></symbol>
+    <symbol id="i-launch" viewBox="0 0 16 16"><path d="M9 1.4h5.6V7h-1.5V4.1L8.4 8.8 7.1 7.5l4.7-4.7H9zM2.4 3.4h4v1.5H3.9v7.2h7.2V9h1.5v4.2H2.4z"/></symbol>
+    <symbol id="i-add" viewBox="0 0 16 16"><path d="M7.25 2.4h1.5v4.85h4.85v1.5H8.75v4.85h-1.5V8.75H2.4v-1.5h4.85z"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1.2a4.4 4.4 0 0 0-2.5 8v1.6h5V9.2A4.4 4.4 0 0 0 8 1.2zM5.5 12.2h5V13.8h-5z"/></symbol>
+    <symbol id="i-flow" viewBox="0 0 16 16"><path d="M1 3.4h8.6V1.6L14 4.8l-4.4 3.2V6.1H1zM15 12.6H6.4v1.8L2 11.2 6.4 8v1.8H15z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm-.75 2.9h1.5v3.7l2.5 1.4-.7 1.3-3.3-1.9z"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 16 16"><path d="M1.4 1.4h5.4v1.6H3v3.8H1.4zM14.6 1.4v5.4H13V3h-3.8V1.4zM1.4 14.6V9.2h1.6v3.8h3.8v1.6zM14.6 14.6H9.2V13h3.8V9.2h1.6z"/></symbol>
+    <symbol id="i-collapse" viewBox="0 0 16 16"><path d="M1.4 6.6h5.4v1.6H3v3.8H1.4zM14.6 6.6v5.4H13V8.2H9.2V6.6zM1.4 1.4h1.6v3.8h3.8v1.6H1.4zM14.6 1.4v5.4H9.2V5.2h3.8V1.4z"/></symbol>
+    <symbol id="i-contrast" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.6v10.8a5.4 5.4 0 0 1 0-10.8z"/></symbol>
+    <symbol id="i-history" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 1.4a6.6 6.6 0 1 1-6.5 7.7h1.6A5 5 0 1 0 8 3v2.2L5.2 2.6 8 0zM7.25 4.6h1.5v3.6l2.4 1.4-.75 1.3-3.15-1.8z"/></symbol>
+    <symbol id="i-key" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M5.4 1.4a3.6 3.6 0 1 1 0 7.2 3.6 3.6 0 0 1 0-7.2zM5.4 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7.2 7.6 8.4 8.8H15v2h-2v2H9.4v-1.6H8L6.2 9.4z"/></symbol>
+  </defs>
+</svg>
 
-  <!-- ── Landing overlay (hidden when project is open) ─────────────────── -->
-  <div id="landing">
-    <div class="landing-inner">
-      <div class="landing-brand">
-        <svg class="landing-bolt" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M18 2L4 17h12l-2 13 14-16H16L18 2z" fill="currentColor"/>
-        </svg>
-        <span class="landing-title">EcoTrace</span>
-      </div>
-      <p class="landing-sub">Android Battery Drain Analysis — Powered by IBM Bob AI</p>
+<a class="skip-link" href="#work-surface">Skip to the findings table</a>
 
-      <div class="landing-flow">
-        <div class="flow-step">
-          <div class="flow-icon flow-icon-blue">
-            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-              <rect x="3" y="2" width="14" height="16" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M7 7h6M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="flow-label">Android Project</div>
-          <div class="flow-sublabel">Java / Kotlin source</div>
-        </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-step">
-          <div class="flow-icon flow-icon-green">
-            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-              <path d="M10 2L4 9h5l-1 9 7-8h-5l1-8z" fill="currentColor"/>
-            </svg>
-          </div>
-          <div class="flow-label">EcoTrace AI</div>
-          <div class="flow-sublabel">23 energy detectors</div>
-        </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-step">
-          <div class="flow-icon flow-icon-red">
-            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-              <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M10 6v4l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="flow-label">Code Hotspots</div>
-          <div class="flow-sublabel">Causal chain traced</div>
-        </div>
-        <div class="flow-arrow">→</div>
-        <div class="flow-step">
-          <div class="flow-icon flow-icon-purple">
-            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-              <path d="M5 7l3 3-3 3M10 13h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <rect x="2" y="2" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
-          </div>
-          <div class="flow-label">Generated Fix</div>
-          <div class="flow-sublabel">Copy-ready code</div>
-        </div>
-      </div>
+<div id="app" class="cx-shell">
 
-      <button id="btn-landing-open" class="landing-cta">
-        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15">
-          <path d="M1.5 3.5A1 1 0 0 1 2.5 2.5h4l1.5 1.5H13.5A1 1 0 0 1 14.5 5v7a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3.5z" stroke="currentColor" stroke-width="1.3" fill="rgba(0,230,118,0.12)"/>
-        </svg>
-        Open Android Project
+  <!-- ═════════════════════════════════════════════════════════════════════
+       Shell header
+       Carbon UI shell: product identity and project context on the left,
+       work-surface switching in the centre, global actions on the right.
+       ═════════════════════════════════════════════════════════════════════ -->
+  <header id="titlebar" class="cx-shell__header" data-tauri-drag-region>
+    <div class="cx-shell__header-left" data-tauri-drag-region>
+      <button id="btn-toggle-nav" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+              title="Show navigator" aria-label="Show navigator" hidden>
+        <svg class="i"><use href="#i-folder" /></svg>
       </button>
 
-      <div class="landing-patterns">
-        <div class="lp-item lp-critical">WakeLock W01–W06</div>
-        <div class="lp-item lp-critical">Network N01–N06</div>
-        <div class="lp-item lp-high">GPS / Sensors L01–L05</div>
-        <div class="lp-item lp-high">Architecture A01–A06</div>
+      <div class="cx-brand">
+        <svg class="cx-brand__mark"><use href="#i-logo" /></svg>
+        <span class="cx-brand__name">EcoTrace</span>
       </div>
 
-      <div class="landing-ibm">Built with IBM Bob AI — causal chain analysis across all files simultaneously</div>
+      <div class="cx-project" id="project-chip" hidden>
+        <svg class="cx-project__icon"><use href="#i-folder" /></svg>
+        <span class="cx-project__name t-truncate" id="project-name"></span>
+        <span class="cx-project__meta" id="project-meta"></span>
+      </div>
     </div>
-  </div>
 
-  <!-- ── 3-Panel content area ──────────────────────────────────────────── -->
-  <div id="panels">
+    <div class="cx-shell__header-center">
+      <div class="cx-segmented" id="surface-switch" role="tablist" aria-label="Work surface">
+        <button class="cx-segmented__option" role="tab" data-surface="findings"
+                aria-selected="true" aria-controls="view-findings" id="surface-tab-findings">
+          <svg class="i"><use href="#i-table" /></svg>
+          Findings <span id="surface-count"></span>
+        </button>
+        <button class="cx-segmented__option" role="tab" data-surface="log"
+                aria-selected="false" aria-controls="view-log" id="surface-tab-log" tabindex="-1">
+          <svg class="i"><use href="#i-terminal" /></svg>
+          Run log
+        </button>
+      </div>
+    </div>
 
-    <!-- ── Panel 1: Project Navigator ───────────────────────────────────── -->
-    <div class="panel" id="panel-navigator">
-      <div class="panel-header">
-        <span class="panel-title">
-          <svg class="panel-icon" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M1.5 2.5A.5.5 0 0 1 2 2h4l1 1.5H12a.5.5 0 0 1 .5.5v6.5a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5V2.5z" stroke="currentColor" stroke-width="1.1"/>
-          </svg>
+    <div class="cx-shell__header-right">
+      <button id="btn-command-palette" class="cx-btn cx-btn--tertiary cx-btn--sm cx-btn--icon"
+              title="Command palette (Ctrl+K)" aria-label="Open command palette">
+        <svg class="i"><use href="#i-search" /></svg>
+      </button>
+
+      <div class="cx-conn" id="bob-status" title="IBM Bob 2.0 connection">
+        <span class="cx-conn__dot" id="bob-status-dot"></span>
+        <span id="bob-status-label">Bob 2.0 offline</span>
+      </div>
+
+      <button id="btn-open-project" class="cx-btn cx-btn--tertiary cx-btn--sm">
+        <svg class="i"><use href="#i-folder" /></svg>
+        Open project
+      </button>
+
+      <button id="btn-export" class="cx-btn cx-btn--primary cx-btn--sm" disabled>
+        <svg class="i"><use href="#i-download" /></svg>
+        Export report
+      </button>
+
+      <button id="btn-settings" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+              title="Settings" aria-label="Settings">
+        <svg class="i"><use href="#i-settings" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ═════════════════════════════════════════════════════════════════════
+       Work surface — three panes, keyboard-operable splitters
+       ═════════════════════════════════════════════════════════════════════ -->
+  <div id="workbench" class="cx-shell__body">
+
+    <!-- ── Project navigator ─────────────────────────────────────────── -->
+    <aside id="panel-navigator" class="cx-pane cx-pane--nav" aria-labelledby="navigator-title">
+      <div class="cx-pane__header">
+        <span class="cx-pane__title" id="navigator-title">
+          <svg class="i"><use href="#i-folder" /></svg>
           Navigator
         </span>
-        <button id="btn-analyze" disabled>Analyze</button>
+        <div class="cx-pane__actions">
+          <button id="btn-tree-expand" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+                  title="Expand all folders" aria-label="Expand all folders" disabled>
+            <svg class="i"><use href="#i-expand" /></svg>
+          </button>
+          <button id="btn-tree-collapse" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+                  title="Collapse all folders" aria-label="Collapse all folders" disabled>
+            <svg class="i"><use href="#i-collapse" /></svg>
+          </button>
+        </div>
       </div>
-      <div class="panel-body" id="file-tree-body">
-        <!-- Empty state — shown by default, hidden by TS when files load -->
+
+      <div class="cx-tree-toolbar">
+        <div class="cx-search cx-search--sm">
+          <svg class="cx-search__icon"><use href="#i-search" /></svg>
+          <input id="input-file-search" class="cx-search__input" type="search"
+                 placeholder="Filter files" aria-label="Filter files by name" autocomplete="off"
+                 spellcheck="false" disabled />
+          <button id="btn-file-search-clear" class="cx-search__clear" aria-label="Clear file filter" hidden>
+            <svg class="i"><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <div class="cx-filters" id="severity-filters" role="group" aria-label="Filter by severity">
+          <button class="cx-filter" data-severity="critical" aria-pressed="true" disabled>
+            <span class="cx-sev-bar cx-sev-bar--critical"></span>Critical <span class="cx-filter__n" id="count-critical">0</span>
+          </button>
+          <button class="cx-filter" data-severity="high" aria-pressed="true" disabled>
+            <span class="cx-sev-bar cx-sev-bar--high"></span>High <span class="cx-filter__n" id="count-high">0</span>
+          </button>
+          <button class="cx-filter" data-severity="medium" aria-pressed="true" disabled>
+            <span class="cx-sev-bar cx-sev-bar--medium"></span>Medium <span class="cx-filter__n" id="count-medium">0</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="cx-pane__body">
         <div id="file-tree-empty">
-          <div class="empty-state">
-            <div class="empty-icon">
-              <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="36" height="36">
-                <path d="M5 9A3 3 0 0 1 8 6h10l4 4H32a3 3 0 0 1 3 3v16a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V9z" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.4"/>
-              </svg>
+          <div class="cx-empty cx-empty--center">
+            <svg class="cx-empty__art"><use href="#i-folder" /></svg>
+            <span class="cx-empty__title">No project loaded</span>
+            <p class="cx-empty__body">
+              Open an Android project to index its Java and Kotlin sources.
+            </p>
+          </div>
+        </div>
+        <div id="file-tree-list" role="tree" aria-label="Project files" hidden></div>
+      </div>
+
+      <!-- Device session — dumpsys profiling -->
+      <div class="cx-device">
+        <div class="cx-device__head">
+          <span class="cx-device__title">
+            <svg class="i"><use href="#i-device" /></svg>
+            Device profile
+          </span>
+          <span class="cx-tag cx-tag--sm cx-tag--neutral" id="device-state">Idle</span>
+        </div>
+        <div class="cx-device__actions">
+          <button id="btn-start-profile" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled>
+            <svg class="i"><use href="#i-play" /></svg>
+            Start
+          </button>
+          <button id="btn-stop-profile" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled>
+            <svg class="i"><use href="#i-stop" /></svg>
+            Stop
+          </button>
+        </div>
+        <p class="cx-device__note" id="device-note">
+          Captures a <code>dumpsys batterystats</code> baseline, then measures
+          the drain rate between two snapshots.
+        </p>
+      </div>
+    </aside>
+
+    <div class="cx-splitter cx-splitter--nav" id="splitter-nav" data-pane="nav"
+         role="separator" aria-orientation="vertical" aria-label="Resize project navigator"
+         tabindex="0" aria-valuemin="240" aria-valuemax="560" aria-valuenow="300"></div>
+
+    <!-- ── Work surface ──────────────────────────────────────────────── -->
+    <main id="panel-feed" class="cx-pane cx-pane--main">
+
+      <section id="view-findings" class="cx-surface" role="tabpanel" aria-labelledby="surface-tab-findings">
+        <div class="cx-surface__head">
+          <div class="cx-surface__heading">
+            <h1 class="cx-surface__title" id="findings-title">Energy findings</h1>
+            <p class="cx-surface__desc" id="findings-desc">
+              Every detected battery anti-pattern, ordered by severity. Expand a
+              row for the offending source and its trace hint.
+            </p>
+          </div>
+          <div class="cx-surface__tally" id="findings-tally" hidden>
+            <span class="cx-tag cx-tag--sm cx-tag--critical" id="tally-critical">
+              <svg class="i"><use href="#i-warning" /></svg><span class="t-numeric">0</span> critical
+            </span>
+            <span class="cx-tag cx-tag--sm cx-tag--high" id="tally-high">
+              <svg class="i"><use href="#i-warning" /></svg><span class="t-numeric">0</span> high
+            </span>
+            <span class="cx-tag cx-tag--sm cx-tag--medium" id="tally-medium">
+              <svg class="i"><use href="#i-warning" /></svg><span class="t-numeric">0</span> medium
+            </span>
+          </div>
+        </div>
+
+        <div class="cx-toolbar" role="toolbar" aria-label="Findings toolbar" aria-controls="findings-body">
+          <div class="cx-search cx-search--sm cx-toolbar__search">
+            <svg class="cx-search__icon"><use href="#i-search" /></svg>
+            <input id="input-findings-search" class="cx-search__input" type="search"
+                   placeholder="Search findings" aria-label="Search findings" autocomplete="off"
+                   spellcheck="false" disabled />
+            <button id="btn-findings-search-clear" class="cx-search__clear" aria-label="Clear finding search" hidden>
+              <svg class="i"><use href="#i-close" /></svg>
+            </button>
+          </div>
+
+          <div class="cx-select cx-select--sm" style="width: 168px">
+            <label class="visually-hidden" for="input-sort">Sort findings by</label>
+            <select id="input-sort">
+              <option value="severity">Severity</option>
+              <option value="file">Location</option>
+              <option value="pattern">Pattern</option>
+              <option value="category">Category</option>
+            </select>
+            <svg class="cx-select__chevron"><use href="#i-chevron-down" /></svg>
+          </div>
+
+          <div class="cx-select cx-select--sm" style="width: 152px">
+            <label class="visually-hidden" for="input-scope">Filter scope</label>
+            <select id="input-scope">
+              <option value="all">All files</option>
+              <option value="flagged">Flagged files only</option>
+              <option value="selected">Selected file</option>
+            </select>
+            <svg class="cx-select__chevron"><use href="#i-chevron-down" /></svg>
+          </div>
+
+          <button id="btn-expand-all" class="cx-btn cx-btn--ghost cx-btn--sm" disabled>
+            Expand all
+          </button>
+          <button id="btn-copy-fixes" class="cx-btn cx-btn--ghost cx-btn--sm" disabled>
+            <svg class="i"><use href="#i-copy" /></svg>
+            Copy all fixes
+          </button>
+
+          <div class="cx-toolbar__spacer"></div>
+          <p class="cx-toolbar__result" id="findings-result" role="status" aria-live="polite"></p>
+          <button id="btn-analyze" class="cx-btn cx-btn--primary cx-btn--sm" disabled>
+            <svg class="i"><use href="#i-play" /></svg>
+            Analyze
+          </button>
+        </div>
+
+        <div class="cx-table-wrap" id="work-surface" tabindex="-1">
+          <table class="cx-table" id="findings-table">
+            <caption class="visually-hidden">
+              Detected energy anti-patterns, sortable by severity, location,
+              pattern and category.
+            </caption>
+            <colgroup>
+              <col style="width: 40px" />
+              <col style="width: 116px" />
+              <col style="width: 92px" />
+              <col />
+              <col style="width: 180px" />
+              <col style="width: 260px" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" class="cx-table__col-expand"><span class="visually-hidden">Expand</span></th>
+                <th scope="col" class="cx-table__sortable" data-sort="severity" aria-sort="ascending">
+                  <span class="cx-table__sort">Severity<svg class="i"><use href="#i-sort" /></svg></span>
+                </th>
+                <th scope="col" class="cx-table__sortable" data-sort="pattern" aria-sort="none">
+                  <span class="cx-table__sort">Rule<svg class="i"><use href="#i-sort" /></svg></span>
+                </th>
+                <th scope="col" class="cx-table__sortable" data-sort="file" aria-sort="none">
+                  <span class="cx-table__sort">Finding<svg class="i"><use href="#i-sort" /></svg></span>
+                </th>
+                <th scope="col" class="cx-table__sortable" data-sort="category" aria-sort="none">
+                  <span class="cx-table__sort">Category<svg class="i"><use href="#i-sort" /></svg></span>
+                </th>
+                <th scope="col" class="cx-table__sortable" data-sort="file" aria-sort="none">
+                  <span class="cx-table__sort">Location<svg class="i"><use href="#i-sort" /></svg></span>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="findings-body"></tbody>
+          </table>
+          <div id="findings-empty" class="cx-empty" hidden></div>
+        </div>
+
+        <div class="cx-summary" id="findings-summary" hidden>
+          <div class="cx-summary__item">
+            <span class="cx-summary__value t-numeric" id="summary-total">0</span>
+            <span>findings</span>
+          </div>
+          <div class="cx-summary__item cx-summary__item--critical">
+            <span class="cx-summary__value t-numeric" id="summary-critical">0</span>
+            <span>critical</span>
+          </div>
+          <div class="cx-summary__item cx-summary__item--high">
+            <span class="cx-summary__value t-numeric" id="summary-high">0</span>
+            <span>high</span>
+          </div>
+          <div class="cx-summary__item cx-summary__item--medium">
+            <span class="cx-summary__value t-numeric" id="summary-medium">0</span>
+            <span>medium</span>
+          </div>
+          <div class="cx-summary__item">
+            <span class="cx-summary__value t-numeric" id="summary-files">0</span>
+            <span>files affected</span>
+          </div>
+
+          <div class="cx-subscores" id="subscores" hidden>
+            <div class="cx-subscore">
+              <div class="cx-subscore__head">
+                <span class="cx-subscore__label">Drain <span class="cx-subscore__weight">40%</span></span>
+                <span class="cx-subscore__value" id="score-drain">—</span>
+              </div>
+              <div class="cx-subscore__track"><div class="cx-subscore__fill" id="bar-drain"></div></div>
             </div>
-            <div class="empty-title">No project open</div>
-            <div class="empty-body">
-              Click <strong>Open Project</strong> to select an Android
-              project folder, then <strong>Analyze</strong> to run all
-              23 energy detectors.
+            <div class="cx-subscore">
+              <div class="cx-subscore__head">
+                <span class="cx-subscore__label">Critical <span class="cx-subscore__weight">35%</span></span>
+                <span class="cx-subscore__value" id="score-critical">—</span>
+              </div>
+              <div class="cx-subscore__track"><div class="cx-subscore__fill" id="bar-critical"></div></div>
+            </div>
+            <div class="cx-subscore">
+              <div class="cx-subscore__head">
+                <span class="cx-subscore__label">High <span class="cx-subscore__weight">25%</span></span>
+                <span class="cx-subscore__value" id="score-high">—</span>
+              </div>
+              <div class="cx-subscore__track"><div class="cx-subscore__fill" id="bar-high"></div></div>
             </div>
           </div>
         </div>
-        <div id="file-tree-list"></div>
-      </div>
-      <!-- ADB profiling controls -->
-      <div class="adb-controls">
-        <button id="btn-start-profile" class="adb-btn adb-start">
-          <svg viewBox="0 0 10 12" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="9" height="11">
-            <path d="M0 0l10 6-10 6V0z"/>
-          </svg>
-          Start Profile
-        </button>
-        <button id="btn-stop-profile" class="adb-btn adb-stop" disabled>
-          <svg viewBox="0 0 10 10" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="9" height="9">
-            <rect width="10" height="10" rx="1"/>
-          </svg>
-          Stop
-        </button>
-      </div>
-    </div>
+      </section>
 
-    <!-- ── Panel 2: Intelligence Feed ───────────────────────────────────── -->
-    <div class="panel" id="panel-feed">
-      <div class="panel-header">
-        <span class="panel-title">
-          <svg class="panel-icon" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.1"/>
-            <path d="M7 4v3l2 1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-          </svg>
-          Intelligence Feed
+      <section id="view-log" class="cx-surface" role="tabpanel" aria-labelledby="surface-tab-log" hidden>
+        <div class="cx-surface__head">
+          <div class="cx-surface__heading">
+            <h1 class="cx-surface__title">Run log</h1>
+            <p class="cx-surface__desc">
+              Analysis progress and reasoning stream, newest entry last.
+            </p>
+          </div>
+        </div>
+
+        <div class="cx-log__bar">
+          <div class="cx-filters" role="group" aria-label="Filter log by level">
+            <button class="cx-filter" data-level="all" aria-pressed="true">All</button>
+            <button class="cx-filter" data-level="critical" aria-pressed="false">
+              <span class="cx-sev-bar cx-sev-bar--critical"></span>Critical
+            </button>
+            <button class="cx-filter" data-level="success" aria-pressed="false">
+              <span class="cx-sev-bar cx-sev-bar--ok"></span>Success
+            </button>
+          </div>
+          <div class="cx-toolbar__spacer"></div>
+          <button id="btn-log-autoscroll" class="cx-btn cx-btn--ghost cx-btn--sm" aria-pressed="true">
+            Follow
+          </button>
+          <button id="btn-log-copy" class="cx-btn cx-btn--ghost cx-btn--sm">
+            <svg class="i"><use href="#i-copy" /></svg>
+            Copy
+          </button>
+          <button id="btn-log-clear" class="cx-btn cx-btn--ghost cx-btn--sm">
+            <svg class="i"><use href="#i-close" /></svg>
+            Clear
+          </button>
+        </div>
+
+        <div class="cx-log__stream" id="intelligence-feed" role="log" aria-live="polite" aria-label="Analysis run log"></div>
+      </section>
+
+    </main>
+
+    <div class="cx-splitter cx-splitter--inspector" id="splitter-inspector" data-pane="inspector"
+         role="separator" aria-orientation="vertical" aria-label="Resize finding inspector"
+         tabindex="0" aria-valuemin="320" aria-valuemax="720" aria-valuenow="420"></div>
+
+    <!-- ── Finding inspector ─────────────────────────────────────────── -->
+    <aside id="panel-fix" class="cx-pane cx-pane--inspector" aria-labelledby="inspector-title">
+      <div class="cx-pane__header">
+        <span class="cx-pane__title" id="inspector-title">
+          <svg class="i"><use href="#i-bulb" /></svg>
+          Inspector
         </span>
-        <span id="feed-status">IDLE</span>
-      </div>
-      <div class="panel-body">
-        <div id="intelligence-feed">
-          <div id="feed-empty" class="feed-empty">
-            <div class="feed-empty-icon">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="44" height="44">
-                <circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="2" opacity="0.25"/>
-                <path d="M24 14v10l6 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.35"/>
-              </svg>
-            </div>
-            <strong class="feed-empty-heading">IBM Bob</strong> reasoning streams here in real time.
-            <br><br>
-            Each finding is traced back through the call graph to its
-            architectural root cause across all files simultaneously.
-            <br><br>
-            <span class="feed-empty-note">No other tool does this.</span>
-          </div>
+        <div class="cx-pane__actions">
+          <button id="btn-inspector-prev" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+                  title="Previous finding (Alt+↑)" aria-label="Previous finding" disabled>
+            <svg class="i"><use href="#i-chevron-up" /></svg>
+          </button>
+          <button id="btn-inspector-next" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+                  title="Next finding (Alt+↓)" aria-label="Next finding" disabled>
+            <svg class="i"><use href="#i-chevron-down" /></svg>
+          </button>
         </div>
       </div>
-    </div>
 
-    <!-- ── Panel 3: Fix Station ──────────────────────────────────────────── -->
-    <div class="panel" id="panel-fix">
-      <div class="panel-header">
-        <span class="panel-title">
-          <svg class="panel-icon" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M8.5 1.5L12.5 5.5l-7 7H1.5V9l7-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
-            <path d="M9.5 2.5l2 2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-          </svg>
-          Fix Station
-        </span>
+      <div id="fix-empty" class="cx-empty cx-empty--center">
+        <svg class="cx-empty__art"><use href="#i-bulb" /></svg>
+        <span class="cx-empty__title">No finding selected</span>
+        <p class="cx-empty__body">
+          Choose a row in the findings table — or a file in the navigator — to
+          review its detail, causal chain and generated fix.
+        </p>
       </div>
-      <div class="panel-body" id="fix-station-body">
-        <div id="fix-empty" class="fix-empty">
-          <div class="fix-empty-icon">
-            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="44" height="44">
-              <path d="M30 6l8 8-22 22H8V28L30 6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.25"/>
-              <path d="M31 7l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
-            </svg>
-          </div>
-          <div class="fix-empty-heading">Select a finding</div>
-          <div class="fix-empty-body">
-            Click any finding in the Navigator or Feed to see:
-            <ul class="fix-empty-list">
-              <li>Full detail &amp; severity</li>
-              <li>Causal chain from root cause to symptom</li>
-              <li>Generated fix code ready to copy</li>
-            </ul>
+
+      <div id="finding-detail" hidden>
+        <div class="cx-inspector__head">
+          <div class="cx-inspector__identity">
+            <div class="cx-inspector__title">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="cx-tag cx-tag--md cx-tag--critical" id="detail-severity-badge">
+                  <svg class="i"><use href="#i-warning" /></svg>Critical
+                </span>
+                <span class="cx-cell-id" id="detail-pattern-id">W01</span>
+              </div>
+              <h2 class="cx-inspector__name" id="detail-pattern-name"></h2>
+              <div class="cx-inspector__loc">
+                <svg class="i"><use href="#i-file" /></svg>
+                <span id="detail-file"></span>
+              </div>
+            </div>
+            <div class="cx-inspector__nav">
+              <span class="cx-inspector__position" id="detail-position"></span>
+            </div>
           </div>
         </div>
 
-        <!-- Finding detail card (hidden until a finding is selected) -->
-        <div id="finding-detail" style="display:none;">
-          <div class="finding-card">
-            <div class="finding-card-header">
-              <span class="severity-badge" id="detail-severity-badge">CRITICAL</span>
-              <span class="finding-pattern-name" id="detail-pattern-name"></span>
-              <span class="finding-pattern-id" id="detail-pattern-id"></span>
+        <div class="cx-inspector__tabs" role="tablist" aria-label="Finding detail">
+          <button class="cx-tab cx-inspector__tab" role="tab" id="tab-overview"
+                  aria-controls="panel-overview" aria-selected="true" data-tab="overview">
+            Overview
+          </button>
+          <button class="cx-tab cx-inspector__tab" role="tab" id="tab-chain"
+                  aria-controls="panel-chain" aria-selected="false" data-tab="chain" tabindex="-1">
+            Causal chain <span class="cx-tab__count" id="chain-count"></span>
+          </button>
+          <button class="cx-tab cx-inspector__tab" role="tab" id="tab-fix"
+                  aria-controls="panel-fix" aria-selected="false" data-tab="fix" tabindex="-1">
+            Fix
+          </button>
+        </div>
+
+        <div class="cx-inspector__body">
+          <div class="cx-inspector__panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+            <div class="cx-section">
+              <h3 class="cx-section__title">
+                <svg class="i"><use href="#i-info" /></svg>
+                What this means
+              </h3>
+              <p class="cx-prose" id="detail-description"></p>
             </div>
-            <div class="finding-file" id="detail-file"></div>
-            <div class="finding-description" id="detail-description"></div>
-            <pre class="finding-snippet" id="detail-snippet"></pre>
+
+            <div class="cx-section">
+              <h3 class="cx-section__title">
+                <svg class="i"><use href="#i-code" /></svg>
+                Offending source
+              </h3>
+              <pre class="cx-code cx-code--snippet cx-code--gutter" id="detail-snippet" tabindex="0" aria-label="Offending source line"></pre>
+            </div>
+
+            <div class="cx-section">
+              <h3 class="cx-section__title">
+                <svg class="i"><use href="#i-key" /></svg>
+                Attributes
+              </h3>
+              <dl class="cx-kv">
+                <dt class="cx-kv__k">Rule</dt><dd class="cx-kv__v" id="detail-rule-id">—</dd>
+                <dt class="cx-kv__k">Category</dt><dd class="cx-kv__v" id="detail-category">—</dd>
+                <dt class="cx-kv__k">Severity</dt><dd class="cx-kv__v" id="detail-severity">—</dd>
+                <dt class="cx-kv__k">Location</dt><dd class="cx-kv__v" id="detail-location">—</dd>
+              </dl>
+            </div>
+
+            <div class="cx-hint" id="detail-hint-wrap">
+              <svg class="i"><use href="#i-flow" /></svg>
+              <span id="detail-hint"></span>
+            </div>
           </div>
 
-          <!-- Causal chain tree -->
-          <div class="chain-section">
-            <div class="chain-section-title">
-              <span class="chain-section-dot"></span>
-              Causal Chain
+          <div class="cx-inspector__panel" id="panel-chain" role="tabpanel" aria-labelledby="tab-chain" hidden>
+            <div class="cx-section">
+              <h3 class="cx-section__title">
+                <svg class="i"><use href="#i-flow" /></svg>
+                Causal chain
+              </h3>
+              <p class="cx-section__text" id="chain-intro">
+                The path from the architectural entry point to this anti-pattern.
+              </p>
             </div>
-            <ul class="chain-tree" id="chain-tree"></ul>
+            <ol class="cx-chain" id="chain-tree"></ol>
+            <div id="chain-empty" class="cx-empty" hidden>
+              <svg class="cx-empty__art"><use href="#i-flow" /></svg>
+              <span class="cx-empty__title">No chain resolved</span>
+              <p class="cx-empty__body">
+                A chain is traced for critical findings once the call graph
+                reaches an architectural entry point. Configure an IBM Bob key
+                to have it traced across every file at once.
+              </p>
+            </div>
           </div>
 
-          <!-- Generated fix -->
-          <div class="fix-section">
-            <div class="fix-section-header">
-              <span class="fix-section-title">
-                <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" width="11" height="11" style="flex-shrink:0">
-                  <path d="M3 3l3 3-3 3M7 9h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Generated Fix
-              </span>
-              <button id="btn-copy-fix">Copy</button>
+          <div class="cx-inspector__panel" id="panel-fix" role="tabpanel" aria-labelledby="tab-fix" hidden>
+            <div class="cx-fix">
+              <div class="cx-fix__bar">
+                <span class="cx-fix__origin" id="fix-origin">
+                  <svg class="i"><use href="#i-bulb" /></svg>
+                  <span id="fix-origin-text">Template remediation</span>
+                </span>
+                <button id="btn-copy-fix" class="cx-btn cx-btn--tertiary cx-btn--sm">
+                  <svg class="i"><use href="#i-copy" /></svg>
+                  Copy
+                </button>
+              </div>
+              <pre class="cx-code cx-code--fix cx-code--gutter" id="fix-code" tabindex="0" aria-label="Generated fix"></pre>
+              <div class="cx-fix__actions">
+                <button id="btn-copy-fix-full" class="cx-btn cx-btn--secondary cx-btn--sm">
+                  <svg class="i"><use href="#i-copy" /></svg>
+                  Copy fix
+                </button>
+                <button id="btn-apply-fix-note" class="cx-btn cx-btn--ghost cx-btn--sm">
+                  <svg class="i"><use href="#i-launch" /></svg>
+                  Copy as patch note
+                </button>
+              </div>
             </div>
-            <pre class="fix-code" id="fix-code"></pre>
           </div>
         </div>
       </div>
-    </div>
+    </aside>
 
-  </div><!-- /#panels -->
-
-  <!-- ── Vitals bar (bottom) ───────────────────────────────────────────── -->
-  <div id="vitals-bar">
-    <div class="vitals-item vitals-grade">
-      <span class="vitals-label">Grade</span>
-      <span class="grade-badge grade-none" id="grade-badge">—</span>
-    </div>
-    <span class="vitals-divider"></span>
-    <div class="vitals-item">
-      <span class="vitals-label">Drain</span>
-      <span class="vitals-value" id="vitals-drain">—</span>
-    </div>
-    <span class="vitals-divider"></span>
-    <div class="vitals-item">
-      <span class="vitals-label">Critical</span>
-      <span class="vitals-value" id="vitals-critical">0</span>
-    </div>
-    <div class="vitals-item">
-      <span class="vitals-label">High</span>
-      <span class="vitals-value" id="vitals-high">0</span>
-    </div>
-    <span class="vitals-divider"></span>
-    <div id="scan-progress-wrap">
-      <div id="scan-progress-bar"></div>
-    </div>
-    <span id="vitals-status">Ready</span>
-    <div class="vitals-spacer"></div>
-    <button id="btn-export" disabled>
-      <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" width="12" height="12" style="flex-shrink:0">
-        <path d="M2 9.5v2a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-2M7 2v7M4.5 6.5L7 9l2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      Export Report
-    </button>
-    <button id="btn-settings" class="btn-settings-icon" title="Settings">
-      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" width="15" height="15">
-        <circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/>
-        <path d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.4 3.4l.7.7M11.9 11.9l.7.7M3.4 12.6l.7-.7M11.9 4.1l.7-.7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-      </svg>
-    </button>
   </div>
 
-</div><!-- /#app -->
-
-<!-- ── Settings modal ──────────────────────────────────────────────────── -->
-<div id="settings-overlay">
-  <div id="settings-modal">
-    <div class="settings-header">
-      <span class="settings-logo">
-        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" width="16" height="16">
-          <path d="M11 2L3 11h7l-1 7 8-9h-7l1-7z" fill="currentColor"/>
-        </svg>
+  <!-- ═════════════════════════════════════════════════════════════════════
+       Status bar — score, rollups, progress, shortcut hints
+       ═════════════════════════════════════════════════════════════════════ -->
+  <footer id="vitals-bar" class="cx-statusbar">
+    <div class="cx-statusbar__group">
+      <span class="cx-statusbar__label">Grade</span>
+      <span class="cx-grade">
+        <span class="cx-grade__letter" id="grade-badge" data-band="none">—</span>
+        <span class="cx-grade__track"><span class="cx-grade__fill" id="grade-fill"></span></span>
+        <span class="cx-statusbar__value" id="vitals-score">—</span>
       </span>
-      <h2>EcoTrace Settings</h2>
     </div>
 
-    <div class="settings-field">
-      <label for="input-adb-path">ADB Executable Path</label>
-      <input type="text" id="input-adb-path"
-             placeholder="adb  (or full path e.g. C:\platform-tools\adb.exe)" />
-      <div class="settings-note">
-        Leave as <code>adb</code> if ADB is in your system PATH.
-        Override with the full path if you get "adb not found" errors.
+    <span class="cx-statusbar__rule"></span>
+
+    <div class="cx-statusbar__group">
+      <span class="cx-statusbar__label">Drain</span>
+      <span class="cx-statusbar__value" id="vitals-drain">—</span>
+    </div>
+
+    <span class="cx-statusbar__rule"></span>
+
+    <div class="cx-statusbar__group">
+      <span class="cx-statusbar__label">Critical</span>
+      <span class="cx-statusbar__value" id="vitals-critical">0</span>
+    </div>
+    <div class="cx-statusbar__group">
+      <span class="cx-statusbar__label">High</span>
+      <span class="cx-statusbar__value" id="vitals-high">0</span>
+    </div>
+    <div class="cx-statusbar__group">
+      <span class="cx-statusbar__label">Medium</span>
+      <span class="cx-statusbar__value" id="vitals-medium">0</span>
+    </div>
+    <div class="cx-statusbar__group">
+      <span class="cx-statusbar__label">Files</span>
+      <span class="cx-statusbar__value" id="vitals-files">0</span>
+    </div>
+
+    <span class="cx-statusbar__rule"></span>
+
+    <div class="cx-statusbar__group" style="min-width: 120px">
+      <div class="cx-progress" id="scan-progress-wrap" style="width: 96px">
+        <div class="cx-progress__bar" id="scan-progress-bar"></div>
+      </div>
+      <span class="cx-statusbar__value cx-statusbar__value--muted" id="vitals-status">Ready</span>
+    </div>
+
+    <div class="cx-statusbar__group cx-statusbar__group--push">
+      <button id="btn-history" class="cx-btn cx-btn--ghost cx-btn--sm">
+        <svg class="i"><use href="#i-history" /></svg>
+        History
+      </button>
+      <span class="cx-statusbar__hint"><kbd>Ctrl</kbd><kbd>K</kbd> commands</span>
+      <span class="cx-statusbar__hint"><kbd>F5</kbd> analyze</span>
+    </div>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Onboarding — shown until a project is open
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="landing" class="cx-onboarding" data-open="true" role="dialog" aria-modal="false"
+     aria-labelledby="onboarding-title">
+  <div class="cx-onboarding__inner">
+    <div class="cx-onboarding__head">
+      <span class="cx-onboarding__eyebrow">
+        <svg class="i"><use href="#i-activity" /></svg>
+        Android energy intelligence
+      </span>
+      <h1 class="cx-onboarding__title" id="onboarding-title">
+        Find what drains the battery — and why it happens.
+      </h1>
+      <p class="cx-onboarding__lede">
+        EcoTrace runs 23 energy detectors over a Java or Kotlin project, then
+        traces every critical finding backwards through the call graph to the
+        architectural decision that caused it. Static analysis is local and
+        instant; cross-file causal tracing is handed to IBM Bob 2.0.
+      </p>
+      <div class="cx-onboarding__actions">
+        <button id="btn-landing-open" class="cx-btn cx-btn--primary cx-btn--lg">
+          <svg class="i"><use href="#i-folder" /></svg>
+          Open Android project
+        </button>
+        <button id="btn-landing-settings" class="cx-btn cx-btn--tertiary cx-btn--lg">
+          <svg class="i"><use href="#i-settings" /></svg>
+          Configure Bob key
+        </button>
       </div>
     </div>
 
-    <div class="settings-field">
-      <label for="input-api-key">API Key <span class="settings-label-optional">(optional)</span></label>
-      <div class="input-row">
-        <input type="password" id="input-api-key"
-               placeholder="sk-..." autocomplete="off" />
-        <button id="btn-toggle-api-key" type="button">Show</button>
+    <div class="cx-onboarding__capabilities">
+      <div class="cx-cap">
+        <svg class="cx-cap__icon"><use href="#i-search" /></svg>
+        <span class="cx-cap__title">23 local detectors</span>
+        <p class="cx-cap__body">
+          Wakefulness, network, location and architecture rules evaluated in
+          process, with no network round-trip.
+        </p>
       </div>
-      <div class="settings-note">
-        Stored locally in <code>%APPDATA%\ecotrace\settings.json</code>.<br>
-        API integration coming in the next release.
+      <div class="cx-cap">
+        <svg class="cx-cap__icon"><use href="#i-flow" /></svg>
+        <span class="cx-cap__title">Causal chains</span>
+        <p class="cx-cap__body">
+          Up to six hops backwards from the anti-pattern to the entry point
+          that put it on the path.
+        </p>
+      </div>
+      <div class="cx-cap">
+        <svg class="cx-cap__icon"><use href="#i-code" /></svg>
+        <span class="cx-cap__title">Copy-ready fixes</span>
+        <p class="cx-cap__body">
+          A remediation for every rule, written against WorkManager,
+          coroutines and modern lifecycle APIs.
+        </p>
+      </div>
+      <div class="cx-cap">
+        <svg class="cx-cap__icon"><use href="#i-battery" /></svg>
+        <span class="cx-cap__title">Live drain grading</span>
+        <p class="cx-cap__body">
+          ADB <code>dumpsys batterystats</code> snapshots turn the static
+          result into a measured mAh/min rate and an A+–F grade.
+        </p>
       </div>
     </div>
 
-    <div class="settings-actions">
-      <button id="btn-settings-cancel">Cancel</button>
-      <button id="btn-settings-save">Save Settings</button>
+    <div>
+      <h2 class="cx-pane__title" style="margin-bottom: 12px">
+        <svg class="i"><use href="#i-table" /></svg>
+        Detector catalogue
+      </h2>
+      <div class="cx-catalog" id="detector-catalog"></div>
+    </div>
+
+    <div class="cx-onboarding__footer">
+      <span class="cx-statusbar__hint"><kbd>Ctrl</kbd><kbd>K</kbd> command palette</span>
+      <span class="cx-statusbar__hint"><kbd>Ctrl</kbd><kbd>O</kbd> open project</span>
+      <span class="cx-statusbar__hint"><kbd>F5</kbd> analyze</span>
+      <span class="cx-statusbar__hint"><kbd>?</kbd> shortcut help</span>
     </div>
   </div>
 </div>
 
-<script>
-  // Wire landing CTA → main open-project button (no TS modification needed)
-  document.getElementById('btn-landing-open').addEventListener('click', function() {
-    document.getElementById('btn-open-project').click();
-  });
-  // Hide landing when file-tree-empty is hidden (project loaded)
-  var _landing = document.getElementById('landing');
-  var _ftEmpty = document.getElementById('file-tree-empty');
-  if (_ftEmpty && _landing) {
-    new MutationObserver(function() {
-      if (_ftEmpty.style.display === 'none') _landing.classList.add('hidden');
-    }).observe(_ftEmpty, { attributes: true, attributeFilter: ['style'] });
-  }
-</script>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Command palette
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="palette-overlay" class="cx-scrim cx-palette" role="dialog" aria-modal="true"
+     aria-labelledby="palette-label">
+  <div class="cx-palette__panel">
+    <h2 class="visually-hidden" id="palette-label">Command palette</h2>
+    <div class="cx-palette__input">
+      <svg class="i"><use href="#i-search" /></svg>
+      <input id="palette-input" class="cx-palette__field" type="text" autocomplete="off"
+             spellcheck="false" placeholder="Search commands, findings and files" />
+    </div>
+    <div class="cx-palette__list" id="palette-list" role="listbox" aria-label="Commands"></div>
+    <div class="cx-palette__footer">
+      <span class="cx-palette__footer-item"><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+      <span class="cx-palette__footer-item"><kbd>Enter</kbd> run</span>
+      <span class="cx-palette__footer-item"><kbd>Esc</kbd> dismiss</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Settings
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="settings-overlay" class="cx-scrim cx-modal-scrim" role="dialog" aria-modal="true"
+     aria-labelledby="settings-title">
+  <div class="cx-modal" id="settings-modal">
+    <div class="cx-modal__header">
+      <div>
+        <h2 class="cx-modal__title" id="settings-title">Settings</h2>
+        <p class="cx-modal__subtitle">Stored locally in <code>%APPDATA%\ecotrace\settings.json</code></p>
+      </div>
+      <button id="btn-settings-close" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+              aria-label="Close settings">
+        <svg class="i"><use href="#i-close" /></svg>
+      </button>
+    </div>
+
+    <div class="cx-modal__body" id="settings-body">
+      <div class="cx-modal__section">
+        <div class="cx-modal__section-head">
+          <h3 class="cx-modal__section-title">
+            <svg class="i"><use href="#i-bulb" /></svg>
+            IBM Bob 2.0
+          </h3>
+          <div class="settings-section-status" id="api-connection-status">
+            <span class="cx-conn__dot"></span>
+            <span>Not connected</span>
+          </div>
+        </div>
+
+        <div class="cx-field">
+          <label class="cx-field__label" for="input-api-key">
+            API key <span class="cx-tag cx-tag--sm cx-tag--neutral">Required</span>
+          </label>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="input-api-key" class="cx-input cx-input--mono"
+                   placeholder="Paste your IBM Bob 2.0 API key" autocomplete="off" spellcheck="false" />
+            <button id="btn-toggle-api-key" type="button" class="cx-btn cx-btn--tertiary cx-btn--sm"
+                    style="flex:none">Show</button>
+          </div>
+          <p class="cx-field__hint">
+            Issued from bob.ibm.com under Account → API Keys. Sent only to the
+            Bob endpoint, never written to a log.
+          </p>
+        </div>
+
+        <div class="cx-field">
+          <label class="cx-field__label" for="input-bob-model">Model</label>
+          <div class="cx-select">
+            <select id="input-bob-model">
+              <option value="bob-2">Bob 2.0 — full repository context</option>
+              <option value="bob-2-mini">Bob 2.0 Mini — faster, shallower chains</option>
+            </select>
+            <svg class="cx-select__chevron"><use href="#i-chevron-down" /></svg>
+          </div>
+          <p class="cx-field__hint">
+            Static analysis runs either way; the model only affects how deep
+            cross-file causal tracing goes.
+          </p>
+        </div>
+
+        <div>
+          <button id="btn-test-api" class="cx-btn cx-btn--secondary cx-btn--sm">
+            <svg class="i"><use href="#i-activity" /></svg>
+            Test connection
+          </button>
+        </div>
+      </div>
+
+      <div class="cx-modal__section">
+        <div class="cx-modal__section-head">
+          <h3 class="cx-modal__section-title">
+            <svg class="i"><use href="#i-device" /></svg>
+            Android Debug Bridge
+          </h3>
+        </div>
+
+        <div class="cx-field">
+          <label class="cx-field__label" for="input-adb-path">
+            ADB executable <span class="cx-tag cx-tag--sm cx-tag--neutral">Optional</span>
+          </label>
+          <input type="text" id="input-adb-path" class="cx-input cx-input--mono"
+                 placeholder="adb" spellcheck="false" />
+          <p class="cx-field__hint">
+            Needed only for live drain profiling. Static analysis works without
+            it. If <code>adb</code> is not on your PATH, give the full path.
+          </p>
+        </div>
+      </div>
+
+      <div class="cx-modal__section">
+        <div class="cx-modal__section-head">
+          <h3 class="cx-modal__section-title">
+            <svg class="i"><use href="#i-contrast" /></svg>
+            Appearance
+          </h3>
+        </div>
+
+        <div class="cx-field">
+          <label class="cx-field__label" for="input-theme">Carbon theme</label>
+          <div class="cx-select">
+            <select id="input-theme">
+              <option value="g100">Gray 100 — highest contrast dark</option>
+              <option value="g90">Gray 90 — softer dark</option>
+              <option value="white">White — light</option>
+            </select>
+            <svg class="cx-select__chevron"><use href="#i-chevron-down" /></svg>
+          </div>
+          <p class="cx-field__hint">
+            EcoTrace is built on the IBM Carbon Design System, which ships four
+            themes over one shared token set. Switching is instant and
+            affects the whole application.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="cx-modal__footer">
+      <span class="cx-modal__footer-note" id="settings-note"></span>
+      <button id="btn-settings-cancel" class="cx-btn cx-btn--secondary">Cancel</button>
+      <button id="btn-settings-save" class="cx-btn cx-btn--primary">Save settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     Scan history
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="history-overlay" class="cx-scrim cx-modal-scrim" role="dialog" aria-modal="true"
+     aria-labelledby="history-title">
+  <div class="cx-modal" style="width: min(560px, calc(100vw - 48px))">
+    <div class="cx-modal__header">
+      <div>
+        <h2 class="cx-modal__title" id="history-title">Scan history</h2>
+        <p class="cx-modal__subtitle" id="history-subtitle">Every graded scan recorded for this machine.</p>
+      </div>
+      <button id="btn-history-close" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
+              aria-label="Close history">
+        <svg class="i"><use href="#i-close" /></svg>
+      </button>
+    </div>
+    <div class="cx-modal__body" id="history-body"></div>
+  </div>
+</div>
+
+<!-- Notifications. Polite live region so scan results are announced. -->
+<div id="toasts" class="cx-toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

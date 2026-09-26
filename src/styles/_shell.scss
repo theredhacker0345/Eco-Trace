@@ -1,0 +1,1141 @@
+// ============================================================================
+// Shell — application frame, header, status bar, overlays
+//
+// Layout follows the Carbon UI Shell: a fixed 48px header spanning the
+// viewport, a work surface that fills the remaining height, and a status bar.
+// The work surface is a three-pane workbench separated by keyboard-operable
+// splitters, with pane widths persisted per user.
+//
+// Nothing here adds elevation to a flat surface. Carbon reserves shadow for
+// surfaces that genuinely float above the page (modal, toast, command palette)
+// and expresses hierarchy through the layer scale instead — the difference
+// between a tool that looks designed and one that looks decorated.
+// ============================================================================
+
+.cx-shell {
+  display: grid;
+  grid-template-rows: var(--cx-shell-header-h) 1fr var(--cx-statusbar-h);
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--cx-surface-app);
+}
+
+// ===========================================================================
+// Header
+// ===========================================================================
+
+.cx-shell__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--cx-space-md);
+  padding: 0 var(--cx-space-md);
+  background: var(--cds-layer-01);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  user-select: none;
+  z-index: 40;
+}
+
+.cx-shell__header-left,
+.cx-shell__header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  min-width: 0;
+}
+
+.cx-shell__header-right {
+  justify-content: flex-end;
+}
+
+.cx-shell__header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cx-space-sm);
+  min-width: 0;
+}
+
+// ── Brand ──────────────────────────────────────────────────────────────────
+
+.cx-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  padding-right: var(--cx-space-xs);
+}
+
+.cx-brand__mark {
+  width: 16px;
+  height: 16px;
+  fill: var(--cds-interactive);
+}
+
+.cx-brand__name {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.32px;
+  color: var(--cx-text-primary);
+}
+
+// ── Project breadcrumb ─────────────────────────────────────────────────────
+
+.cx-project {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  min-width: 0;
+  padding-left: var(--cx-space-sm);
+  border-left: 1px solid var(--cds-border-subtle-00);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-secondary);
+}
+
+.cx-project[hidden] {
+  display: none;
+}
+
+.cx-project__icon {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: var(--cx-text-placeholder);
+}
+
+.cx-project__name {
+  font-family: var(--cx-font-mono);
+  font-weight: 500;
+  color: var(--cx-text-primary);
+}
+
+.cx-project__meta {
+  color: var(--cx-text-placeholder);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+// ── Connection indicator ───────────────────────────────────────────────────
+
+.cx-conn {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  height: var(--cx-row-h-sm);
+  padding: 0 var(--cx-space-sm);
+  border: 1px solid var(--cds-border-subtle-00);
+  background: var(--cds-layer-02);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-secondary);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.cx-conn__dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--cds-border-strong-01);
+}
+
+.cx-conn--on {
+  border-color: rgba(66, 190, 101, 0.32);
+}
+
+.cx-conn--on .cx-conn__dot {
+  background: var(--cx-support-success);
+  animation: cx-pulse 3s var(--cx-ease-productive) infinite;
+}
+
+.cx-conn--busy .cx-conn__dot {
+  background: var(--cx-info);
+  animation: cx-pulse 1.2s var(--cx-ease-productive) infinite;
+}
+
+.cx-conn--error {
+  border-color: rgba(250, 77, 86, 0.4);
+}
+
+.cx-conn--error .cx-conn__dot {
+  background: var(--cx-critical);
+}
+
+@keyframes cx-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+// ===========================================================================
+// Work surface
+// ===========================================================================
+
+.cx-shell__body {
+  display: grid;
+  grid-template-columns: var(--pane-nav, 300px) 1px minmax(0, 1fr) 1px var(
+      --pane-inspector,
+      420px
+    );
+  min-height: 0;
+  overflow: hidden;
+  background: var(--cx-surface-app);
+}
+
+.cx-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--cx-surface-raised);
+}
+
+.cx-pane--main {
+  background: var(--cx-surface-app);
+}
+
+.cx-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+// ===========================================================================
+// Pane chrome
+// ===========================================================================
+
+.cx-pane__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cx-space-sm);
+  height: var(--cx-panel-header-h);
+  padding: 0 var(--cx-space-md);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  flex: none;
+}
+
+.cx-pane__title {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-secondary);
+}
+
+.cx-pane__title > svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.cx-pane__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-3xs);
+  flex: none;
+}
+
+// ===========================================================================
+// Splitter
+//
+// A real separator widget: draggable with the pointer, resizable with the
+// keyboard, and announced with aria-valuenow so assistive technology can read
+// the current pane width. Widths persist to localStorage.
+// ===========================================================================
+
+.cx-splitter {
+  position: relative;
+  background: var(--cds-border-subtle-00);
+  cursor: col-resize;
+  transition: background var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-splitter::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.cx-splitter:hover,
+.cx-splitter[data-dragging='true'] {
+  background: var(--cds-interactive);
+}
+
+.cx-splitter:focus-visible {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -1px;
+}
+
+body[data-resizing='true'] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body[data-resizing='true'] * {
+  pointer-events: none;
+}
+
+// ===========================================================================
+// Status bar
+// ===========================================================================
+
+.cx-statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-md);
+  height: var(--cx-statusbar-h);
+  padding: 0 var(--cx-space-md);
+  background: var(--cds-layer-01);
+  border-top: 1px solid var(--cds-border-subtle-00);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-secondary);
+  user-select: none;
+  overflow: hidden;
+  z-index: 30;
+}
+
+.cx-statusbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  flex: none;
+  min-width: 0;
+}
+
+.cx-statusbar__group--push {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.cx-statusbar__rule {
+  width: 1px;
+  height: 12px;
+  background: var(--cds-border-subtle-00);
+  flex: none;
+}
+
+.cx-statusbar__label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-statusbar__value {
+  font-family: var(--cx-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cx-text-primary);
+}
+
+.cx-statusbar__value--critical {
+  color: var(--cx-critical);
+}
+
+.cx-statusbar__value--high {
+  color: var(--cx-high);
+}
+
+.cx-statusbar__value--muted {
+  color: var(--cx-text-placeholder);
+}
+
+.cx-statusbar__hint {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  color: var(--cx-text-placeholder);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.cx-statusbar__hint kbd {
+  height: 16px;
+  min-width: 16px;
+  font-size: 10px;
+  padding: 0 3px;
+}
+
+// ===========================================================================
+// Grade meter
+//
+// A composite score is only useful if its parts are legible, so the status bar
+// carries a live score meter. Weights match src/grader/grade.ts:
+// drain 40%, critical 35%, high 25%.
+// ===========================================================================
+
+.cx-grade {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+}
+
+.cx-grade__letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cds-text-inverse);
+  background: var(--cds-border-strong-01);
+}
+
+.cx-grade__letter[data-band='aplus'],
+.cx-grade__letter[data-band='a'] {
+  background: var(--cx-success);
+}
+
+.cx-grade__letter[data-band='b'] {
+  background: #24a148;
+}
+
+.cx-grade__letter[data-band='c'] {
+  background: var(--cx-medium);
+}
+
+.cx-grade__letter[data-band='d'] {
+  background: var(--cx-high);
+}
+
+.cx-grade__letter[data-band='f'] {
+  background: var(--cx-critical);
+}
+
+.cx-grade__letter[data-band='none'] {
+  background: var(--cds-layer-02);
+  color: var(--cx-text-placeholder);
+}
+
+.cx-grade__track {
+  position: relative;
+  display: block;
+  width: 120px;
+  height: 4px;
+  background: var(--cds-layer-accent-01);
+  overflow: hidden;
+}
+
+.cx-grade__fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--cx-success);
+  transition: width var(--cx-duration-slow) var(--cx-ease-productive);
+}
+
+// ===========================================================================
+// Scrim
+// ===========================================================================
+
+.cx-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  background: var(--cds-overlay);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--cx-duration-standard) var(--cx-ease-productive),
+    visibility var(--cx-duration-standard);
+}
+
+.cx-scrim[data-open='true'] {
+  opacity: 1;
+  visibility: visible;
+}
+
+// ===========================================================================
+// Command palette
+//
+// A modal search surface over the whole app, bound to Ctrl/Cmd+K. It replaces
+// long toolbars: every capability is reachable from one list, and each row
+// states its shortcut in the right-hand gutter, which is also how the user
+// learns that the shortcut exists.
+// ===========================================================================
+
+.cx-palette {
+  justify-content: flex-start;
+  align-items: center;
+  padding-top: 12vh;
+}
+
+.cx-palette__panel {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 32px));
+  max-height: 60vh;
+  background: var(--cds-layer-02);
+  box-shadow: var(--cx-shadow-overlay);
+  transform: translateY(-8px);
+  opacity: 0;
+  transition:
+    transform var(--cx-duration-standard) var(--cx-ease-entrance),
+    opacity var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-scrim[data-open='true'] .cx-palette__panel {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.cx-palette__input {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-sm);
+  height: 48px;
+  padding: 0 var(--cx-space-md);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  flex: none;
+}
+
+.cx-palette__input > svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--cx-text-placeholder);
+}
+
+.cx-palette__field {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--cx-text-primary);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.cx-palette__field::placeholder {
+  color: var(--cx-text-placeholder);
+}
+
+.cx-palette__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--cx-space-2xs) 0;
+}
+
+.cx-palette__group {
+  padding: var(--cx-space-xs) var(--cx-space-md) var(--cx-space-2xs);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-sm);
+  width: 100%;
+  padding: 0 var(--cx-space-md);
+  border: none;
+  background: transparent;
+  color: var(--cx-text-primary);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cx-palette__item[aria-selected='true'] {
+  background: var(--cds-layer-selected-01);
+}
+
+.cx-palette__item[aria-selected='true'] .cx-palette__item-icon {
+  fill: var(--cx-text-primary);
+}
+
+.cx-palette__item-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: var(--cx-text-placeholder);
+}
+
+.cx-palette__item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-palette__item-hint {
+  font-size: 11px;
+  color: var(--cx-text-placeholder);
+  flex: none;
+  font-family: var(--cx-font-mono);
+}
+
+.cx-palette__empty {
+  padding: var(--cx-space-xl) var(--cx-space-md);
+  text-align: center;
+  font-size: 14px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-palette__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-md);
+  padding: var(--cx-space-xs) var(--cx-space-md);
+  border-top: 1px solid var(--cds-border-subtle-00);
+  background: var(--cds-layer-01);
+  font-size: 11px;
+  color: var(--cx-text-placeholder);
+  flex: none;
+}
+
+.cx-palette__footer-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+}
+
+// ===========================================================================
+// Modal
+//
+// Carbon's composed modal: header, scrollable body, and a footer whose actions
+// sit right. Focus is trapped while open and returned to the trigger on close.
+// ===========================================================================
+
+.cx-modal-scrim {
+  align-items: center;
+  justify-content: center;
+  padding: var(--cx-space-xl);
+}
+
+.cx-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 48px));
+  max-height: min(80vh, 720px);
+  background: var(--cds-layer-01);
+  box-shadow: var(--cx-shadow-overlay);
+  transform: scale(0.98);
+  opacity: 0;
+  transition:
+    transform var(--cx-duration-standard) var(--cx-ease-entrance),
+    opacity var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-scrim[data-open='true'] .cx-modal {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.cx-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cx-space-md);
+  padding: var(--cx-space-lg) var(--cx-space-lg) var(--cx-space-md);
+  flex: none;
+}
+
+.cx-modal__title {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 400;
+  color: var(--cx-text-primary);
+}
+
+.cx-modal__subtitle {
+  margin-top: var(--cx-space-3xs);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--cds-border-subtle-00);
+}
+
+.cx-modal__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-md);
+  padding: var(--cx-space-lg);
+}
+
+.cx-modal__section + .cx-modal__section {
+  border-top: 1px solid var(--cds-border-subtle-00);
+}
+
+.cx-modal__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cx-space-sm);
+}
+
+.cx-modal__section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-secondary);
+}
+
+.cx-modal__section-title > svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.cx-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cx-space-xs);
+  padding: var(--cx-space-md) var(--cx-space-lg);
+  background: var(--cds-layer-02);
+  flex: none;
+}
+
+.cx-modal__footer-note {
+  margin-right: auto;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+}
+
+.settings-section-status {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-secondary);
+  font-family: var(--cx-font-mono);
+}
+
+// ===========================================================================
+// Toasts
+//
+// Carbon toast: bottom-left, raised surface, auto-dismiss, closable. Severity
+// is carried by a leading icon and a coloured left edge rather than by
+// recolouring the whole surface, so a stack of toasts stays readable.
+// ===========================================================================
+
+.cx-toasts {
+  position: fixed;
+  left: var(--cx-space-md);
+  bottom: calc(var(--cx-statusbar-h) + var(--cx-space-md));
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-2xs);
+  width: min(400px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.cx-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cx-space-sm);
+  padding: var(--cx-space-sm) var(--cx-space-md);
+  background: var(--cds-layer-03);
+  border-left: 2px solid var(--cds-border-strong-01);
+  box-shadow: var(--cx-shadow-popover);
+  color: var(--cds-text-primary);
+  font-size: 14px;
+  line-height: 20px;
+  pointer-events: auto;
+  animation: cx-toast-in var(--cx-duration-slow) var(--cx-ease-entrance) both;
+}
+
+.cx-toast[data-leaving='true'] {
+  animation: cx-toast-out var(--cx-duration-standard) var(--cx-ease-exit) both;
+}
+
+@keyframes cx-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cx-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+
+.cx-toast__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 2px;
+  fill: currentColor;
+}
+
+.cx-toast__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.cx-toast__title {
+  font-weight: 500;
+}
+
+.cx-toast__detail {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cds-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.cx-toast--error {
+  border-left-color: var(--cx-critical);
+}
+
+.cx-toast--error .cx-toast__icon {
+  fill: var(--cds-text-error);
+}
+
+.cx-toast--warning {
+  border-left-color: var(--cx-medium);
+}
+
+.cx-toast--warning .cx-toast__icon {
+  fill: var(--cx-medium);
+}
+
+.cx-toast--success {
+  border-left-color: var(--cx-success);
+}
+
+.cx-toast--success .cx-toast__icon {
+  fill: var(--cx-support-success);
+}
+
+.cx-toast--info {
+  border-left-color: var(--cx-info);
+}
+
+.cx-toast--info .cx-toast__icon {
+  fill: var(--cds-link-primary);
+}
+
+.cx-toast__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin: -2px -6px 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--cds-text-secondary);
+  cursor: pointer;
+}
+
+.cx-toast__close:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cds-text-primary);
+}
+
+.cx-toast__close > svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+// ===========================================================================
+// Onboarding
+//
+// Shown until a project is open. Carbon's guidance for a first-run surface is
+// to state what the product does, expose the primary action once, and give the
+// user a way to learn the domain. The detector catalogue does the last part:
+// the 23 rules are the product's actual differentiator, so they are listed
+// rather than described.
+// ===========================================================================
+
+.cx-onboarding {
+  position: absolute;
+  inset: var(--cx-shell-header-h) 0 var(--cx-statusbar-h) 0;
+  z-index: 35;
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+  background: var(--cx-surface-app);
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.995);
+  transition:
+    opacity var(--cx-duration-slow) var(--cx-ease-productive),
+    visibility var(--cx-duration-slow),
+    transform var(--cx-duration-slow) var(--cx-ease-entrance);
+}
+
+.cx-onboarding[data-open='true'] {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+.cx-onboarding__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-2xl);
+  width: min(960px, 100%);
+  padding: var(--cx-space-3xl) var(--cx-space-xl) var(--cx-space-3xl);
+}
+
+.cx-onboarding__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-md);
+  max-width: 72ch;
+}
+
+.cx-onboarding__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-onboarding__eyebrow > svg {
+  width: 14px;
+  height: 14px;
+  fill: var(--cds-interactive);
+}
+
+.cx-onboarding__title {
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 300;
+  letter-spacing: -0.2px;
+  color: var(--cx-text-primary);
+  max-width: 24ch;
+}
+
+.cx-onboarding__lede {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--cds-text-secondary);
+  max-width: 64ch;
+}
+
+.cx-onboarding__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-sm);
+  flex-wrap: wrap;
+}
+
+.cx-onboarding__capabilities {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(216px, 1fr));
+  gap: 1px;
+  background: var(--cds-border-subtle-00);
+  border: 1px solid var(--cds-border-subtle-00);
+}
+
+.cx-cap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-xs);
+  padding: var(--cx-space-lg);
+  background: var(--cds-layer-01);
+}
+
+.cx-cap__icon {
+  width: 20px;
+  height: 20px;
+  fill: var(--cds-interactive);
+}
+
+.cx-cap__title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--cx-text-primary);
+}
+
+.cx-cap__body {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--cx-space-lg);
+}
+
+.cx-catalog__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-xs);
+}
+
+.cx-catalog__head {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  padding-bottom: var(--cx-space-xs);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-secondary);
+}
+
+.cx-catalog__head > svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.cx-catalog__count {
+  margin-left: auto;
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-catalog__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cx-space-xs);
+  padding: var(--cx-space-3xs) 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--cds-text-secondary);
+}
+
+.cx-catalog__id {
+  flex: none;
+  width: 28px;
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-onboarding__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-md);
+  flex-wrap: wrap;
+  padding-top: var(--cx-space-lg);
+  border-top: 1px solid var(--cds-border-subtle-00);
+  font-size: 12px;
+  color: var(--cx-text-placeholder);
+}
+
+// ---------------------------------------------------------------------------
+// Narrow viewports
+//
+// Below 1280px the three-pane workbench stops being readable, so the inspector
+// becomes an overlay sheet. Below 960px the navigator does too. Both stay
+// reachable from the header.
+// ---------------------------------------------------------------------------
+
+@media (max-width: 1280px) {
+  .cx-shell__body {
+    grid-template-columns: var(--pane-nav, 264px) 1px minmax(0, 1fr) 0 0;
+  }
+
+  .cx-splitter--inspector {
+    display: none;
+  }
+
+  .cx-pane--inspector {
+    position: fixed;
+    top: var(--cx-shell-header-h);
+    right: 0;
+    bottom: var(--cx-statusbar-h);
+    width: min(var(--pane-inspector, 420px), 92vw);
+    z-index: 90;
+    border-left: 1px solid var(--cds-border-subtle-00);
+    box-shadow: var(--cx-shadow-overlay);
+    transform: translateX(100%);
+    transition: transform var(--cx-duration-slow) var(--cx-ease-entrance);
+  }
+
+  .cx-pane--inspector[data-overlay-open='true'] {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 960px) {
+  .cx-shell__body {
+    grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+  }
+
+  .cx-splitter--nav {
+    display: none;
+  }
+
+  .cx-pane--nav {
+    position: fixed;
+    top: var(--cx-shell-header-h);
+    left: 0;
+    bottom: var(--cx-statusbar-h);
+    width: min(var(--pane-nav, 300px), 88vw);
+    z-index: 90;
+    border-right: 1px solid var(--cds-border-subtle-00);
+    box-shadow: var(--cx-shadow-overlay);
+    transform: translateX(-100%);
+    transition: transform var(--cx-duration-slow) var(--cx-ease-entrance);
+  }
+
+  .cx-pane--nav[data-overlay-open='true'] {
+    transform: translateX(0);
+  }
+
+  .cx-shell__header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .cx-shell__header-center {
+    display: none;
+  }
+}

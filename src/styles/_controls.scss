@@ -1,0 +1,971 @@
+// ============================================================================
+// Controls — buttons, fields, selection, tags, tabs, meters
+//
+// Component anatomy and sizing follow the Carbon Design System:
+//
+//   button      sm 32 · md 40 · lg 48 · field 100% · square 32
+//   text input  sm 32 · md 40, 2px focus ring, helper + error slots
+//   search      32, magnifier leading, clear affordance trailing
+//   checkbox    16px control inside a 20px hit target, whole label clickable
+//   switch      36×18 track, sliding thumb
+//   tag         sm 18 · md 24, square, optional icon slot
+//   tabs        32, 2px selected indicator
+//   progress    4px track, 100% width, indeterminate variant
+//
+// Component-level values that Carbon resolves per theme (button fills, tag
+// fills) are declared here explicitly using Carbon's own g100 values, and
+// overridden for the light themes at the foot of this file. Universal colour
+// roles continue to come from _tokens.scss.
+// ============================================================================
+
+:root {
+  // Carbon g100 component fills
+  --cx-btn-primary: #0f62fe; // background-brand
+  --cx-btn-primary-hover: #0353e9;
+  --cx-btn-primary-active: #002d9c;
+  --cx-btn-secondary: #393939; // layer-02
+  --cx-btn-secondary-hover: #525252; // layer-03
+  --cx-btn-tertiary-border: #6f6f6f; // border-strong-01
+  --cx-btn-tertiary-hover: #393939;
+  --cx-btn-danger: #da1e28;
+  --cx-btn-danger-hover: #ba1b23;
+  --cx-tag-background: #262626; // layer-01
+  --cx-tag-red-text: #ff8389;
+  --cx-tag-green-text: #6fdc8c;
+  --cx-tag-yellow-text: #f1c21b;
+  --cx-tag-orange-text: #ff832b;
+  --cx-tag-blue-text: #78a9ff;
+  --cx-tag-purple-text: #d0a9ff;
+}
+
+// ===========================================================================
+// Button
+// ===========================================================================
+
+.cx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cx-space-xs);
+  box-sizing: border-box;
+  height: var(--cx-control-h);
+  padding: 0 var(--cx-space-lg);
+  border: 1px solid transparent;
+  border-radius: var(--cx-radius);
+  background: transparent;
+  color: var(--cx-text-primary);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 400;
+  letter-spacing: 0.16px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--cx-duration-quick) var(--cx-ease-productive),
+    color var(--cx-duration-quick) var(--cx-ease-productive),
+    border-color var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-btn > svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.cx-btn:disabled {
+  color: var(--cx-text-disabled);
+  background: var(--cds-layer-01);
+  cursor: not-allowed;
+}
+
+.cx-btn:disabled > svg {
+  fill: var(--cx-text-disabled);
+}
+
+// ── Primary ────────────────────────────────────────────────────────────────
+.cx-btn--primary {
+  background: var(--cx-btn-primary);
+  color: var(--cds-text-inverse);
+  font-weight: 500;
+}
+
+.cx-btn--primary:hover:not(:disabled) {
+  background: var(--cx-btn-primary-hover);
+}
+
+.cx-btn--primary:active:not(:disabled) {
+  background: var(--cx-btn-primary-active);
+}
+
+// ── Secondary ──────────────────────────────────────────────────────────────
+.cx-btn--secondary {
+  background: var(--cx-btn-secondary);
+  color: var(--cx-text-primary);
+}
+
+.cx-btn--secondary:hover:not(:disabled) {
+  background: var(--cx-btn-secondary-hover);
+}
+
+// ── Tertiary ───────────────────────────────────────────────────────────────
+.cx-btn--tertiary {
+  border-color: var(--cx-btn-tertiary-border);
+  color: var(--cx-text-primary);
+}
+
+.cx-btn--tertiary:hover:not(:disabled) {
+  background: var(--cx-btn-tertiary-hover);
+}
+
+// ── Ghost ──────────────────────────────────────────────────────────────────
+.cx-btn--ghost {
+  padding: 0 var(--cx-space-sm);
+  color: var(--cx-link);
+}
+
+.cx-btn--ghost:hover:not(:disabled) {
+  background: var(--cds-layer-hover-01);
+  color: var(--cx-link-hover);
+  text-decoration: underline;
+}
+
+.cx-btn[aria-pressed='true'] {
+  background: var(--cds-layer-selected-01);
+  color: var(--cx-text-primary);
+  text-decoration: none;
+}
+
+// ── Danger ─────────────────────────────────────────────────────────────────
+.cx-btn--danger {
+  background: var(--cx-btn-danger);
+  color: var(--cds-text-inverse);
+  font-weight: 500;
+}
+
+.cx-btn--danger:hover:not(:disabled) {
+  background: var(--cx-btn-danger-hover);
+}
+
+// ── Sizes ──────────────────────────────────────────────────────────────────
+.cx-btn--sm {
+  height: var(--cx-row-h-sm);
+  padding: 0 var(--cx-space-md);
+  font-size: 12px;
+  letter-spacing: 0.32px;
+}
+
+.cx-btn--sm > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.cx-btn--lg {
+  height: var(--cx-control-h-lg);
+  padding: 0 var(--cx-space-lg);
+}
+
+.cx-btn--xl {
+  height: 48px;
+  padding: 0 var(--cx-space-xl);
+  font-size: 16px;
+}
+
+// Square: icon-only. 32×32 keeps a 1:1 icon-to-label rhythm in the shell.
+.cx-btn--icon {
+  width: var(--cx-control-h);
+  padding: 0;
+}
+
+.cx-btn--sm.cx-btn--icon {
+  width: var(--cx-row-h-sm);
+}
+
+// Field: fills its container.
+.cx-btn--field {
+  width: 100%;
+  max-width: none;
+}
+
+// ===========================================================================
+// Text input
+// ===========================================================================
+
+.cx-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-2xs);
+}
+
+.cx-field__label {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.32px;
+  color: var(--cx-text-secondary);
+}
+
+.cx-input,
+.cx-textarea {
+  width: 100%;
+  height: var(--cx-control-h);
+  padding: 0 var(--cx-space-md);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-strong-01);
+  border-radius: 0;
+  background: var(--cds-field-01);
+  color: var(--cx-text-primary);
+  font-size: 14px;
+  line-height: 18px;
+  caret-color: var(--cds-interactive);
+  transition:
+    outline-color var(--cx-duration-quick) var(--cx-ease-productive),
+    border-color var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-textarea {
+  height: auto;
+  min-height: 80px;
+  padding: var(--cx-space-xs) var(--cx-space-md);
+  resize: vertical;
+  line-height: 20px;
+}
+
+.cx-input::placeholder,
+.cx-textarea::placeholder {
+  color: var(--cx-text-placeholder);
+}
+
+.cx-input:focus-visible,
+.cx-textarea:focus-visible {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -2px;
+  border-color: transparent;
+}
+
+.cx-input:disabled {
+  background: var(--cds-layer-01);
+  color: var(--cx-text-disabled);
+  border-bottom-color: var(--cds-border-subtle-00);
+  cursor: not-allowed;
+}
+
+.cx-input--mono {
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+}
+
+.cx-input--sm {
+  height: var(--cx-row-h-sm);
+  font-size: 12px;
+}
+
+.cx-field__hint {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-field__hint code {
+  font-size: 11px;
+}
+
+// ===========================================================================
+// Search
+//
+// Carbon's search: magnifier leading, clear affordance trailing. Sized to the
+// panel rhythm so it can sit inline in a toolbar.
+// ===========================================================================
+
+.cx-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--cx-control-h);
+  background: var(--cds-field-01);
+  border-bottom: 1px solid var(--cds-border-strong-01);
+  transition: outline-color var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-search:focus-within {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -2px;
+}
+
+.cx-search__icon {
+  width: 16px;
+  height: 16px;
+  margin: 0 var(--cx-space-xs);
+  fill: var(--cx-text-placeholder);
+  flex: none;
+}
+
+.cx-search:focus-within .cx-search__icon {
+  fill: var(--cx-text-primary);
+}
+
+.cx-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--cx-text-primary);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.cx-search__input::placeholder {
+  color: var(--cx-text-placeholder);
+}
+
+.cx-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.cx-search__clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cx-control-h);
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--cx-text-secondary);
+  cursor: pointer;
+}
+
+.cx-search__clear:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-search__clear > svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.cx-search--sm {
+  height: var(--cx-row-h-sm);
+}
+
+// ===========================================================================
+// Select
+// ===========================================================================
+
+.cx-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--cx-control-h);
+  background: var(--cds-field-01);
+  border-bottom: 1px solid var(--cds-border-strong-01);
+}
+
+.cx-select:focus-within {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -2px;
+}
+
+.cx-select select {
+  appearance: none;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--cx-space-2xl) 0 var(--cx-space-md);
+  border: none;
+  background: transparent;
+  color: var(--cx-text-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cx-select select:disabled {
+  color: var(--cx-text-disabled);
+  cursor: not-allowed;
+}
+
+.cx-select option {
+  background: var(--cds-layer-02);
+  color: var(--cx-text-primary);
+}
+
+.cx-select__chevron {
+  position: absolute;
+  right: var(--cx-space-xs);
+  width: 16px;
+  height: 16px;
+  fill: var(--cx-text-secondary);
+  pointer-events: none;
+}
+
+.cx-select--sm {
+  height: var(--cx-row-h-sm);
+}
+
+.cx-select--sm select {
+  font-size: 12px;
+}
+
+// ===========================================================================
+// Checkbox
+//
+// 16px box, 20px hit target, whole label activates. Checked state is an
+// interactive-blue fill with a white check, matching Carbon.
+// ===========================================================================
+
+.cx-checkbox {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  min-height: 20px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cx-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cx-checkbox__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: var(--cds-field-01);
+  border: 1px solid var(--cds-border-strong-01);
+  transition: background var(--cx-duration-fast) var(--cx-ease-productive);
+}
+
+.cx-checkbox__box > svg {
+  width: 12px;
+  height: 12px;
+  fill: var(--cds-text-inverse);
+  opacity: 0;
+}
+
+.cx-checkbox input:checked + .cx-checkbox__box {
+  background: var(--cds-interactive);
+  border-color: var(--cds-interactive);
+}
+
+.cx-checkbox input:checked + .cx-checkbox__box > svg {
+  opacity: 1;
+}
+
+.cx-checkbox:hover .cx-checkbox__box {
+  border-color: var(--cx-text-primary);
+}
+
+.cx-checkbox input:focus-visible ~ .cx-checkbox__box {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -2px;
+}
+
+.cx-checkbox input:disabled ~ .cx-checkbox__box {
+  border-color: var(--cds-border-disabled);
+  background: var(--cds-layer-01);
+}
+
+.cx-checkbox__label {
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.32px;
+  color: var(--cx-text-secondary);
+}
+
+// ===========================================================================
+// Switch
+// ===========================================================================
+
+.cx-switch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cx-space-md);
+  width: 100%;
+  min-height: var(--cx-control-h);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cx-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cx-switch__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cx-switch__title {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--cx-text-primary);
+}
+
+.cx-switch__desc {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-switch__track {
+  position: relative;
+  width: 36px;
+  height: 18px;
+  flex: none;
+  background: var(--cds-toggle-off);
+  transition: background var(--cx-duration-standard) var(--cx-ease-productive);
+}
+
+.cx-switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--cds-text-primary);
+  transition: transform var(--cx-duration-standard) var(--cx-ease-productive);
+}
+
+.cx-switch input:checked ~ .cx-switch__track {
+  background: var(--cds-interactive);
+}
+
+.cx-switch input:checked ~ .cx-switch__track .cx-switch__thumb {
+  transform: translateX(18px);
+  background: var(--cds-text-inverse);
+}
+
+.cx-switch input:checked:hover ~ .cx-switch__track {
+  background: var(--cds-link-primary);
+}
+
+.cx-switch input:focus-visible ~ .cx-switch__track {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: 2px;
+}
+
+// ===========================================================================
+// Tag
+// ===========================================================================
+
+.cx-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  height: 20px;
+  padding: 0 var(--cx-space-xs);
+  background: var(--cx-tag-background);
+  color: var(--cds-text-primary);
+  font-size: 11px;
+  line-height: 20px;
+  letter-spacing: 0.32px;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.cx-tag > svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.cx-tag--md {
+  height: 24px;
+  font-size: 12px;
+  line-height: 24px;
+  padding: 0 var(--cx-space-sm);
+}
+
+.cx-tag--sm {
+  height: 18px;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 var(--cx-space-xs);
+}
+
+.cx-tag--critical {
+  color: var(--cx-tag-red-text);
+}
+
+.cx-tag--high {
+  color: var(--cx-tag-orange-text);
+}
+
+.cx-tag--medium {
+  color: var(--cx-tag-yellow-text);
+}
+
+.cx-tag--ok {
+  color: var(--cx-tag-green-text);
+}
+
+.cx-tag--info {
+  color: var(--cx-tag-blue-text);
+}
+
+.cx-tag--purple {
+  color: var(--cx-tag-purple-text);
+}
+
+.cx-tag--neutral {
+  color: var(--cds-text-secondary);
+}
+
+// Square severity marker used in dense rows: a 2px × 12px bar. Reads faster
+// than a dot at small sizes and never competes with the row's text.
+.cx-sev-bar {
+  width: 2px;
+  height: 12px;
+  flex: none;
+  background: var(--cds-border-strong-01);
+}
+
+.cx-sev-bar--critical {
+  background: var(--cx-critical);
+}
+
+.cx-sev-bar--high {
+  background: var(--cx-high);
+}
+
+.cx-sev-bar--medium {
+  background: var(--cx-medium);
+}
+
+.cx-sev-bar--ok {
+  background: var(--cx-success);
+}
+
+.cx-sev-bar--info {
+  background: var(--cx-info);
+}
+
+// ===========================================================================
+// Count badge
+// ===========================================================================
+
+.cx-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 var(--cx-space-3xs);
+  background: var(--cds-layer-accent-01);
+  color: var(--cx-text-primary);
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-count--critical {
+  background: var(--cx-critical);
+  color: var(--cds-text-inverse);
+}
+
+.cx-count--high {
+  background: var(--cx-high);
+  color: var(--cds-text-inverse);
+}
+
+.cx-count--medium {
+  background: var(--cx-medium);
+  color: var(--cds-text-inverse);
+}
+
+.cx-count--quiet {
+  background: transparent;
+  color: var(--cds-text-placeholder);
+  border: 1px solid var(--cds-border-subtle-00);
+}
+
+// ===========================================================================
+// Tabs
+//
+// Line variant: 32px tall, 2px selected indicator sitting on the baseline.
+// Keyboard support (arrows, Home/End) lives in the inspector module.
+// ===========================================================================
+
+.cx-tabs {
+  display: flex;
+  align-items: stretch;
+  height: var(--cx-control-h);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+}
+
+.cx-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cx-space-xs);
+  padding: 0 var(--cx-space-md);
+  border: none;
+  background: transparent;
+  color: var(--cx-text-secondary);
+  font-size: 14px;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--cx-duration-quick) var(--cx-ease-productive),
+    background var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-tab::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 2px;
+  background: transparent;
+}
+
+.cx-tab:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-tab[aria-selected='true'] {
+  color: var(--cx-text-primary);
+  font-weight: 500;
+}
+
+.cx-tab[aria-selected='true']::after {
+  background: var(--cds-interactive);
+}
+
+.cx-tab > svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.cx-tab__count {
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  color: var(--cx-text-placeholder);
+}
+
+// ===========================================================================
+// Progress
+// ===========================================================================
+
+.cx-progress {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--cds-layer-accent-01);
+  overflow: hidden;
+}
+
+.cx-progress__bar {
+  height: 100%;
+  width: 0%;
+  background: var(--cds-interactive);
+  transition: width var(--cx-duration-standard) var(--cx-ease-productive);
+}
+
+.cx-progress--indeterminate .cx-progress__bar {
+  width: 40%;
+  animation: cx-progress-slide 1.4s var(--cx-ease-productive) infinite;
+}
+
+@keyframes cx-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+// ===========================================================================
+// Segmented control
+//
+// Carbon's content switcher. Used for the work-surface switcher in the shell
+// header; two mutually exclusive modes, so a tablist is the correct semantic
+// and arrow keys move between options.
+// ===========================================================================
+
+.cx-segmented {
+  display: inline-flex;
+  background: var(--cds-layer-01);
+}
+
+.cx-segmented__option {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  height: var(--cx-row-h-sm);
+  padding: 0 var(--cx-space-md);
+  border: none;
+  background: transparent;
+  color: var(--cx-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.32px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-segmented__option:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-segmented__option[aria-selected='true'] {
+  background: var(--cds-interactive);
+  color: var(--cds-text-inverse);
+  font-weight: 500;
+}
+
+.cx-segmented__option > svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+// ===========================================================================
+// Empty state
+//
+// Carbon's empty-state pattern: one illustration, a heading, one sentence of
+// guidance, and at most one primary action. Never a paragraph.
+// ===========================================================================
+
+.cx-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cx-space-sm);
+  padding: var(--cx-space-2xl) var(--cx-space-lg);
+  color: var(--cx-text-secondary);
+}
+
+.cx-empty[hidden] {
+  display: none;
+}
+
+.cx-empty--center {
+  align-items: center;
+  text-align: center;
+  padding: var(--cx-space-3xl) var(--cx-space-lg);
+}
+
+.cx-empty__art {
+  width: 48px;
+  height: 48px;
+  fill: var(--cds-border-strong-01);
+}
+
+.cx-empty__title {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 400;
+  color: var(--cx-text-primary);
+}
+
+.cx-empty__body {
+  font-size: 14px;
+  line-height: 20px;
+  max-width: 46ch;
+}
+
+.cx-empty__actions {
+  display: flex;
+  gap: var(--cx-space-xs);
+  margin-top: var(--cx-space-xs);
+}
+
+// ===========================================================================
+// Skeleton
+// ===========================================================================
+
+.cx-skeleton {
+  background: var(--cds-skeleton-background);
+  animation: cx-skeleton-pulse 1.6s var(--cx-ease-productive) infinite;
+}
+
+@keyframes cx-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+// ===========================================================================
+// Light themes
+//
+// Carbon ships three additional themes. Because every surface, border and text
+// colour in this app resolves to a `--cds-*` custom property, switching theme
+// is a token swap — no component rule changes. Only the component fills that
+// Carbon itself defines per theme need an override.
+// ===========================================================================
+
+[data-theme='g90'],
+[data-theme='g80'],
+[data-theme='white'] {
+  --cx-btn-primary: #0f62fe;
+  --cx-btn-primary-hover: #0353e9;
+  --cx-btn-primary-active: #002d9c;
+  --cx-btn-secondary: #e0e0e0;
+  --cx-btn-secondary-hover: #cacaca;
+  --cx-btn-tertiary-border: #8d8d8d;
+  --cx-btn-tertiary-hover: #e0e0e0;
+  --cx-btn-danger: #da1e28;
+  --cx-btn-danger-hover: #ba1b23;
+  --cx-tag-background: #e0e0e0;
+  --cx-tag-red-text: #a2191f;
+  --cx-tag-green-text: #198038;
+  --cx-tag-yellow-text: #8e6a00;
+  --cx-tag-orange-text: #ba4e00;
+  --cx-tag-blue-text: #0043ce;
+  --cx-tag-purple-text: #6929c4;
+
+  --cx-critical-tint: rgba(250, 77, 86, 0.12);
+  --cx-high-tint: rgba(255, 131, 43, 0.12);
+  --cx-medium-tint: rgba(241, 194, 27, 0.16);
+  --cx-info-tint: rgba(69, 137, 255, 0.12);
+  --cx-success-tint: rgba(66, 190, 101, 0.12);
+
+  --cx-shadow-overlay: 0 12px 24px rgba(0, 0, 0, 0.15),
+    0 48px 96px rgba(0, 0, 0, 0.2);
+  --cx-shadow-popover: 0 2px 6px rgba(0, 0, 0, 0.1),
+    0 18px 48px rgba(0, 0, 0, 0.16);
+}
+
+[data-theme='white'] {
+  --cx-critical: #da1e28;
+  --cx-high: #ba4e00;
+  --cx-medium: #8e6a00;
+  --cx-success: #198038;
+}

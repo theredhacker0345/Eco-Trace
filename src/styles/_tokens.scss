@@ -1,0 +1,254 @@
+// ============================================================================
+// EcoTrace — design tokens
+//
+// Source of truth: IBM Carbon Design System (`@carbon/styles`), Gray 100
+// (g100) theme — IBM's own dark theme, the one Carbon ships for enterprise
+// tooling and IDE-class products.
+//
+// Every colour, type step, spacing increment, radius and duration in EcoTrace
+// resolves to a Carbon token. Nothing here is invented: the Carbon theme
+// mixin emits the full g100 token set as `--cds-*` custom properties, and the
+// only values added below are
+//
+//   1. the font stacks (Carbon mandates IBM Plex Sans + IBM Plex Mono), and
+//   2. a thin semantic alias layer that maps Carbon's *universal* tokens onto
+//      the product's domain vocabulary (severity, surface, code).
+//
+// Component partials consume custom properties only — never Sass variables —
+// so retheming is a single-file change and every value is inspectable.
+// ============================================================================
+
+@use 'sass:map';
+@use '@carbon/styles/scss/themes';
+@use '@carbon/styles/scss/theme' with (
+  $fallback: themes.$white,
+  $theme: themes.$g100
+);
+@use '@carbon/styles/scss/motion';
+@use '@carbon/styles/scss/spacing';
+@use '@carbon/styles/scss/type';
+
+// Re-exported so component partials can `@use 'tokens' as t;`
+@forward '@carbon/styles/scss/theme';
+@forward '@carbon/styles/scss/breakpoint';
+@forward '@carbon/styles/scss/motion';
+@forward '@carbon/styles/scss/spacing';
+@forward '@carbon/styles/scss/type';
+
+// Carbon's motion easings live in a map keyed by surface × mode.
+@function easing($surface, $mode: productive) {
+  @return map.get(map.get(motion.$easings, $surface), $mode);
+}
+
+:root {
+  // ── The complete Carbon g100 token set ────────────────────────────────
+  // Emits --cds-background, --cds-layer-01, --cds-interactive,
+  // --cds-support-error, --cds-syntax-keyword, … and `color-scheme: dark`.
+  @include theme.theme;
+
+  // ── Typeface ────────────────────────────────────────────────────────────
+  // IBM Plex Sans for interface, IBM Plex Mono for code, paths and data.
+  // Both are bundled locally (see _fonts.scss) — the app must work offline.
+  --cx-font-sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', system-ui,
+    sans-serif;
+  --cx-font-mono: 'IBM Plex Mono', 'Cascadia Code', Consolas, monospace;
+
+  // ── Surfaces ────────────────────────────────────────────────────────────
+  // Carbon's layer model, restated for this product's three elevation zones.
+  --cx-surface-app: var(--cds-background); // #161616
+  --cx-surface-raised: var(--cds-layer-01); // #262626
+  --cx-surface-raised-hover: var(--cds-layer-hover-01);
+  --cx-surface-inset: var(--cds-layer-02); // #393939
+  --cx-surface-selected: var(--cds-layer-selected-01);
+  --cx-surface-field: var(--cds-field-01);
+  --cx-surface-overlay: var(--cds-layer-03);
+
+  // Hairlines. Carbon keeps borders to 1px of gray and never adds shadow to a
+  // flat surface — depth comes from the layer scale, not from shadow.
+  --cx-border-subtle: var(--cds-border-subtle-00); // #393939
+  --cx-border-default: var(--cds-border-subtle-01); // #525252
+  --cx-border-strong: var(--cds-border-strong-01); // #6f6f6f
+  --cx-border-interactive: var(--cds-border-interactive);
+
+  // ── Text ────────────────────────────────────────────────────────────────
+  --cx-text-primary: var(--cds-text-primary); // #f4f4f4
+  --cx-text-secondary: var(--cds-text-secondary); // #c6c6c6
+  --cx-text-placeholder: var(--cds-text-helper); // #a8a8a8
+  --cx-text-disabled: var(--cds-text-disabled);
+  --cx-text-on-color: var(--cds-text-on-color);
+
+  // ── Interaction ─────────────────────────────────────────────────────────
+  --cx-interactive: var(--cds-interactive); // #4589ff
+  --cx-link: var(--cds-link-primary); // #78a9ff
+  --cx-link-hover: var(--cds-link-primary-hover);
+  --cx-focus: var(--cds-focus); // #ffffff on g100
+
+  // ── Severity ────────────────────────────────────────────────────────────
+  // Carbon's support palette, mapped to the domain's three severity bands.
+  // Critical → Red 40 · High → Orange 40 (caution major) · Medium → Yellow 30.
+  --cx-critical: var(--cds-support-error); // #fa4d56
+  --cx-high: var(--cds-support-caution-major); // #ff832b
+  --cx-medium: var(--cds-support-warning); // #f1c21b
+  --cx-info: var(--cds-support-info); // #4589ff
+  --cx-success: var(--cds-support-success); // #42be65
+  --cx-unexpected: var(--cds-support-undefined); // #a56eff
+
+  // Tinted status surfaces. Carbon expresses these as low-opacity status fills
+  // rather than hand-picked hex values, so they hold in every theme.
+  --cx-critical-tint: rgba(250, 77, 86, 0.12);
+  --cx-high-tint: rgba(255, 131, 43, 0.12);
+  --cx-medium-tint: rgba(241, 194, 27, 0.14);
+  --cx-info-tint: rgba(69, 137, 255, 0.12);
+  --cx-success-tint: rgba(66, 190, 101, 0.12);
+
+  // ── 2px spacing scale (Carbon) ──────────────────────────────────────────
+  --cx-space-3xs: #{spacing.$spacing-01}; // 2px
+  --cx-space-2xs: #{spacing.$spacing-02}; // 4px
+  --cx-space-xs: #{spacing.$spacing-03}; // 8px
+  --cx-space-sm: #{spacing.$spacing-04}; // 12px
+  --cx-space-md: #{spacing.$spacing-05}; // 16px
+  --cx-space-lg: #{spacing.$spacing-06}; // 24px
+  --cx-space-xl: #{spacing.$spacing-07}; // 32px
+  --cx-space-2xl: #{spacing.$spacing-08}; // 40px
+  --cx-space-3xl: #{spacing.$spacing-09}; // 48px
+  --cx-space-4xl: #{spacing.$spacing-10}; // 64px
+
+  // ── Motion (Carbon) ─────────────────────────────────────────────────────
+  --cx-duration-fast: #{motion.$duration-fast-01}; // 70ms
+  --cx-duration-quick: #{motion.$duration-fast-02}; // 110ms
+  --cx-duration-standard: #{motion.$duration-moderate-01}; // 150ms
+  --cx-duration-slow: #{motion.$duration-moderate-02}; // 240ms
+  --cx-duration-deliberate: #{motion.$duration-slow-01}; // 400ms
+  --cx-ease-productive: #{easing(standard, productive)};
+  --cx-ease-entrance: #{easing(entrance, productive)};
+  --cx-ease-exit: #{easing(exit, productive)};
+  --cx-ease-expressive: #{easing(standard, expressive)};
+
+  // ── Geometry ────────────────────────────────────────────────────────────
+  // Carbon is deliberately square: the system sets --border-radius: 0 on every
+  // component, and that discipline is a large part of its institutional
+  // character. EcoTrace keeps zero radius everywhere and permits exactly one
+  // exception — the 2px cap on meter fills, where a square fill would read as
+  // a rendering artefact against a recessed track.
+  --cx-radius: 0;
+  --cx-radius-meter: 2px;
+
+  // Vertical rhythm, taken from Carbon's component sizing guidance.
+  --cx-shell-header-h: 48px; // UI shell header
+  --cx-panel-header-h: 40px; // section header + data-table toolbar
+  --cx-statusbar-h: 32px;
+  --cx-row-h: 40px; // data table · lg
+  --cx-row-h-sm: 32px; // data table · sm
+  --cx-control-h: 32px; // button · sm
+  --cx-control-h-lg: 40px; // button · md
+  --cx-touch-target: 32px;
+
+  // Pane geometry. Widths are also persisted per user at runtime.
+  --cx-pane-nav-min: 240px;
+  --cx-pane-nav-max: 560px;
+  --cx-pane-inspector-min: 320px;
+  --cx-pane-inspector-max: 720px;
+
+  // Elevation. Carbon allows shadow only for genuinely floating surfaces
+  // (modal, toast, command palette) and never for panels.
+  --cx-shadow-overlay: 0 12px 24px rgba(0, 0, 0, 0.4),
+    0 48px 96px rgba(0, 0, 0, 0.32);
+  --cx-shadow-popover: 0 2px 6px rgba(0, 0, 0, 0.2),
+    0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+// ---------------------------------------------------------------------------
+// Type utilities
+//
+// Carbon's productive set, exposed as classes so markup can opt into the
+// system scale by name instead of re-declaring font properties.
+// ---------------------------------------------------------------------------
+
+@mixin type-style($token) {
+  @include type.type-style($token);
+}
+
+.t-label-01 {
+  @include type-style(label-01);
+  font-weight: var(--cds-label-01-font-weight, 400);
+}
+
+.t-caption-01 {
+  @include type-style(caption-01);
+}
+
+.t-body-01 {
+  @include type-style(body-01);
+}
+
+.t-heading-01 {
+  @include type-style(heading-compact-01);
+  font-weight: 600;
+}
+
+.t-heading-02 {
+  @include type-style(heading-compact-02);
+  font-weight: 600;
+}
+
+.t-heading-03 {
+  @include type-style(heading-03);
+  font-weight: 600;
+}
+
+.t-label-xs {
+  @include type-style(label-01);
+  // Carbon's label treatment for section headers: 12px, 600, +0.16em tracking,
+  // uppercase. Used for every panel and group header in the app.
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-secondary);
+}
+
+.t-mono {
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.01em;
+}
+
+.t-mono-sm {
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+}
+
+.t-numeric {
+  font-family: var(--cx-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+// Truncation helpers. The workbench is dense by design, so overflow handling
+// is a first-class concern rather than an afterthought.
+.t-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.t-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

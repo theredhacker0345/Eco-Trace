@@ -1,0 +1,320 @@
+// ============================================================================
+// Project navigator
+//
+// A file tree with the density of Carbon's UI shell left panel (32px rows) and
+// the affordances of a real IDE navigator: directory grouping with disclosure
+// state, per-file severity, per-file finding counts, keyboard traversal, and a
+// filter that narrows both the tree and the findings table from one place.
+//
+// Selection is bidirectional: picking a finding in the table reveals and
+// highlights its file here, and picking a file here scopes the table to it.
+// ============================================================================
+
+.cx-tree-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-xs);
+  padding: var(--cx-space-xs) var(--cx-space-md) var(--cx-space-sm);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  flex: none;
+}
+
+// ── Filter chips ───────────────────────────────────────────────────────────
+//
+// Severity is the only dimension this pane is filtered by, so it gets a
+// dedicated control rather than a generic select. Each chip shows its live
+// count and is a toggle button, so state is visible and reachable by keyboard
+// in document order.
+
+.cx-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  flex-wrap: wrap;
+}
+
+.cx-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cx-space-3xs);
+  height: 24px;
+  padding: 0 var(--cx-space-xs) 0 var(--cx-space-2xs);
+  border: 1px solid var(--cds-border-subtle-00);
+  background: transparent;
+  color: var(--cds-text-secondary);
+  font-size: 11px;
+  line-height: 22px;
+  letter-spacing: 0.32px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--cx-duration-quick) var(--cx-ease-productive),
+    border-color var(--cx-duration-quick) var(--cx-ease-productive),
+    color var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-filter:hover:not(:disabled) {
+  background: var(--cds-layer-hover-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-filter[aria-pressed='true'] {
+  background: var(--cds-layer-selected-01);
+  border-color: var(--cds-border-strong-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-filter[aria-pressed='true'][data-severity='critical'] {
+  background: var(--cx-critical-tint);
+  border-color: var(--cx-critical);
+  color: var(--cx-critical);
+}
+
+.cx-filter[aria-pressed='true'][data-severity='high'] {
+  background: var(--cx-high-tint);
+  border-color: var(--cx-high);
+  color: var(--cx-high);
+}
+
+.cx-filter[aria-pressed='true'][data-severity='medium'] {
+  background: var(--cx-medium-tint);
+  border-color: var(--cx-medium);
+  color: var(--cx-medium);
+}
+
+.cx-filter__n {
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.cx-filter:disabled {
+  color: var(--cx-text-disabled);
+  border-color: var(--cds-border-subtle-00);
+  cursor: not-allowed;
+}
+
+// ===========================================================================
+// Tree
+// ===========================================================================
+
+.cx-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--cx-space-md);
+}
+
+.cx-tree[hidden] {
+  display: none;
+}
+
+.cx-tree__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.cx-tree__dir {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  width: 100%;
+  height: var(--cx-row-h-sm);
+  padding: 0 var(--cx-space-md) 0 var(--cx-space-xs);
+  border: none;
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  background: var(--cds-layer-01);
+  color: var(--cds-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cx-tree__dir:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-tree__chevron {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: var(--cds-text-placeholder);
+  transition: transform var(--cx-duration-quick) var(--cx-ease-productive);
+}
+
+.cx-tree__dir[aria-expanded='false'] .cx-tree__chevron {
+  transform: rotate(-90deg);
+}
+
+.cx-tree__dirname {
+  font-family: var(--cx-font-mono);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-tree__files {
+  display: flex;
+  flex-direction: column;
+}
+
+.cx-tree__group[data-collapsed='true'] .cx-tree__files {
+  display: none;
+}
+
+.cx-tree__file {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-xs);
+  width: 100%;
+  height: var(--cx-row-h-sm);
+  padding: 0 var(--cx-space-md) 0 var(--cx-space-xl);
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--cds-text-secondary);
+  font-family: var(--cx-font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--cx-duration-fast) var(--cx-ease-productive),
+    border-color var(--cx-duration-fast) var(--cx-ease-productive);
+}
+
+.cx-tree__file:hover {
+  background: var(--cds-layer-hover-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-tree__file[data-selected='true'] {
+  background: var(--cds-layer-selected-01);
+  border-left-color: var(--cds-interactive);
+  color: var(--cx-text-primary);
+}
+
+.cx-tree__sev {
+  width: 2px;
+  height: 14px;
+  flex: none;
+  background: transparent;
+}
+
+.cx-tree__file[data-severity='critical'] .cx-tree__sev {
+  background: var(--cx-critical);
+}
+
+.cx-tree__file[data-severity='high'] .cx-tree__sev {
+  background: var(--cx-high);
+}
+
+.cx-tree__file[data-severity='medium'] .cx-tree__sev {
+  background: var(--cx-medium);
+}
+
+.cx-tree__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.cx-tree__ext {
+  flex: none;
+  color: var(--cds-text-placeholder);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.cx-tree__n {
+  flex: none;
+  min-width: 16px;
+  padding: 0 var(--cx-space-3xs);
+  background: var(--cds-layer-accent-01);
+  color: var(--cds-text-primary);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-tree__file[data-severity='critical'] .cx-tree__n {
+  background: var(--cx-critical);
+  color: var(--cds-text-inverse);
+  font-weight: 600;
+}
+
+.cx-tree__file[data-severity='high'] .cx-tree__n {
+  background: var(--cx-high);
+  color: var(--cds-text-inverse);
+  font-weight: 600;
+}
+
+// ===========================================================================
+// Device session
+//
+// Dumpsys profiling is a two-phase action with real consequences (it holds a
+// baseline snapshot), so it lives in a persistent footer rather than being
+// buried in a toolbar. The primary action is disabled until a project is
+// loaded, and the state machine is reflected in the label, not just colour.
+// ===========================================================================
+
+.cx-device {
+  border-top: 1px solid var(--cds-border-subtle-00);
+  background: var(--cds-layer-01);
+  flex: none;
+}
+
+.cx-device__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cx-space-xs);
+  padding: var(--cx-space-xs) var(--cx-space-md);
+}
+
+.cx-device__title {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-device__title > svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.cx-device__actions {
+  display: flex;
+  gap: var(--cx-space-2xs);
+  padding: 0 var(--cx-space-md) var(--cx-space-xs);
+}
+
+.cx-device__actions .cx-btn {
+  flex: 1;
+}
+
+.cx-device__note {
+  padding: 0 var(--cx-space-md) var(--cx-space-sm);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--cx-text-placeholder);
+}

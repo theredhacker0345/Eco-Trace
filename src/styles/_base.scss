@@ -1,0 +1,254 @@
+// ============================================================================
+// Base — document, typography defaults, icons, focus, selection, scrollbars
+//
+// The workbench is a fixed-viewport application, so `overflow: hidden` on the
+// root with explicit scroll containers per pane is intentional: it is what
+// keeps the shell header and status bar pinned while panes scroll
+// independently.
+// ============================================================================
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--cx-surface-app);
+  color: var(--cx-text-primary);
+  font-family: var(--cx-font-sans);
+  // Carbon's productive base: 14px / 20px.
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+}
+
+a {
+  color: var(--cx-link);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--cx-link-hover);
+  text-decoration: underline;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--cx-font-mono);
+}
+
+code {
+  font-size: 0.92em;
+  background: var(--cds-layer-01);
+  padding: 0 4px;
+}
+
+svg {
+  display: block;
+  flex: none;
+}
+
+::selection {
+  background: rgba(69, 137, 255, 0.4);
+}
+
+// ---------------------------------------------------------------------------
+// Icons
+//
+// Glyphs come from the sprite in index.html and inherit colour through
+// `fill: currentColor`, so one rule covers every size step and every theme.
+// The 16px default matches Carbon's base glyph; 12px is used inside dense
+// rows, 20px in empty-state art.
+// ---------------------------------------------------------------------------
+
+.i {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.i--sm {
+  width: 14px;
+  height: 14px;
+}
+
+.i--xs {
+  width: 12px;
+  height: 12px;
+}
+
+.i--lg {
+  width: 20px;
+  height: 20px;
+}
+
+.i--xl {
+  width: 24px;
+  height: 24px;
+}
+
+// ---------------------------------------------------------------------------
+// Focus
+//
+// Carbon's focus treatment: a 2px ring in the theme's focus colour drawn
+// against the element's own surface. On g100 the focus colour is white, which
+// is the strongest possible signal on a near-black background.
+//
+// Focus is suppressed for pointer interaction only — `:focus-visible` keeps it
+// for keyboard users, and every interactive element in the app uses it.
+// ---------------------------------------------------------------------------
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: -2px;
+}
+
+// Controls flush against a pane edge need the ring drawn outside, or it is
+// clipped by the parent's overflow.
+.cx-focus-ring:focus-visible {
+  outline: 2px solid var(--cx-focus);
+  outline-offset: 2px;
+}
+
+// ---------------------------------------------------------------------------
+// Scrollbars
+//
+// Thin, square, and only visible against the surface they sit on — Carbon
+// keeps scrollbar chrome minimal so it never competes with data.
+// ---------------------------------------------------------------------------
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cds-border-strong-01) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--cds-border-strong-01);
+  border: 4px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cds-border-strong-02);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility affordances
+// ---------------------------------------------------------------------------
+
+// Skip link. The workbench is keyboard-driven, so a means of bypassing the
+// three panes is required, not optional.
+.skip-link {
+  position: absolute;
+  top: calc(var(--cx-space-2xs) * -4);
+  left: var(--cx-space-md);
+  z-index: 400;
+  padding: var(--cx-space-xs) var(--cx-space-md);
+  background: var(--cds-interactive);
+  color: var(--cds-text-inverse);
+  font-size: 14px;
+  font-weight: 500;
+  transition: top var(--cx-duration-quick) var(--cx-ease-entrance);
+}
+
+.skip-link:focus {
+  top: var(--cx-space-2xs);
+  text-decoration: none;
+}
+
+// Keyboard hint. Carbon's guidance is that a shortcut must be discoverable
+// without a manual, so every shortcut is surfaced in-product as a kbd chip.
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--cx-space-2xs);
+  border: 1px solid var(--cds-border-strong-01);
+  background: var(--cds-layer-01);
+  color: var(--cx-text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+// Respect the OS-level motion preference. Every transition in the app is
+// decorative or a state affordance; none carry information that is
+// unavailable statically.
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+// Windows high-contrast. Carbon explicitly supports forced-colors; surfaces
+// and text hand control to the system palette.
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

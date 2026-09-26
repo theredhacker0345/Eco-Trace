@@ -1,0 +1,74 @@
+// ============================================================================
+// IBM Plex — self-hosted typefaces
+//
+// Carbon's type system specifies IBM Plex Sans for interface text and IBM
+// Plex Mono for code. EcoTrace is an offline desktop application, so the faces
+// are bundled rather than fetched from IBM's CDN: no network request on
+// launch, no flash of fallback type, identical rendering in dev and in the
+// packaged Tauri build.
+//
+// IBM Plex is licensed under the SIL Open Font License 1.1 — see
+// ./fonts/LICENSE-IBM-Plex.txt.
+//
+// Five faces ship: three weights of Plex Sans (regular, medium, semibold) and
+// two of Plex Mono, subset to the full Latin character set.
+//
+// `font-display: swap` matches Carbon's default: text paints immediately in
+// the platform fallback and swaps once the face is decoded, so a cold start
+// never blocks on font loading.
+// ============================================================================
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/IBMPlexSans-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/IBMPlexSans-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/IBMPlexSans-SemiBold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/IBMPlexMono-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/IBMPlexMono-SemiBold.woff2') format('woff2');
+}
+
+// Metric-compatible fallbacks. Without these, the first paint in the platform
+// font is a different width from IBM Plex and every table column and toolbar
+// reflows when the face arrives.
+@font-face {
+  font-family: 'IBM Plex Sans Fallback';
+  size-adjust: 100%;
+  src: local('Segoe UI'), local('Helvetica Neue'), local('Arial');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono Fallback';
+  size-adjust: 100%;
+  src: local('Consolas'), local('Menlo'), local('DejaVu Sans Mono');
+}

@@ -1,0 +1,385 @@
+// ============================================================================
+// Inspector
+//
+// The right-hand pane is a single-finding inspector, not a log. It is built as
+// a three-tab surface — Overview, Causal chain, Fix — because those are the
+// three questions a reviewer asks in order, and because tabs let each region
+// keep its own scroll position and its own vertical budget in a 420px column.
+//
+// Header state is always visible regardless of tab: severity, rule identity
+// and the file:line it came from. Reviewing a queue of findings is then a
+// matter of stepping through the inspector without losing your place.
+// ============================================================================
+
+.cx-inspector__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-sm);
+  padding: var(--cx-space-md);
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  flex: none;
+}
+
+.cx-inspector__identity {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cx-space-sm);
+}
+
+.cx-inspector__title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-2xs);
+}
+
+.cx-inspector__name {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 400;
+  color: var(--cx-text-primary);
+}
+
+.cx-inspector__loc {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cx-space-2xs);
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  color: var(--cds-text-secondary);
+  min-width: 0;
+}
+
+.cx-inspector__loc > svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: var(--cds-text-placeholder);
+}
+
+.cx-inspector__loc span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.cx-inspector__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-3xs);
+  flex: none;
+}
+
+.cx-inspector__position {
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  color: var(--cds-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-inspector__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--cds-border-subtle-00);
+  flex: none;
+}
+
+.cx-inspector__tab {
+  flex: 1;
+  min-width: 0;
+}
+
+.cx-inspector__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cx-inspector__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-lg);
+  padding: var(--cx-space-md);
+}
+
+.cx-inspector__panel[hidden] {
+  display: none;
+}
+
+.cx-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-xs);
+}
+
+.cx-section__title {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cx-text-placeholder);
+}
+
+.cx-section__title > svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.cx-section__text {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--cds-text-secondary);
+}
+
+.cx-prose {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--cds-text-secondary);
+  white-space: pre-line;
+}
+
+.cx-kv {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: var(--cx-space-2xs) var(--cx-space-sm);
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.cx-kv__k {
+  color: var(--cds-text-placeholder);
+  margin: 0;
+}
+
+.cx-kv__v {
+  font-family: var(--cx-font-mono);
+  color: var(--cx-text-primary);
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cx-hint {
+  display: flex;
+  gap: var(--cx-space-xs);
+  padding: var(--cx-space-sm);
+  background: var(--cds-layer-02);
+  border-left: 2px solid var(--cds-interactive);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--cds-text-secondary);
+}
+
+.cx-hint > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 2px;
+  fill: var(--cds-link-primary);
+}
+
+.cx-hint--warning {
+  border-left-color: var(--cx-medium);
+}
+
+.cx-hint--warning > svg {
+  fill: var(--cx-medium);
+}
+
+// ===========================================================================
+// Causal chain
+//
+// The chain is the product's differentiator, so it is rendered as a numbered
+// trace rather than a decorative tree: each hop carries its role, its method,
+// its location and why it is in the path. The spine is a 1px rail with
+// role-coloured nodes, matching the syntax of a stack trace.
+// ===========================================================================
+
+.cx-chain {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  counter-reset: cx-hop;
+}
+
+.cx-chain__node {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: var(--cx-space-sm);
+  padding-bottom: var(--cx-space-sm);
+}
+
+.cx-chain__rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.cx-chain__node:not(:last-child) .cx-chain__rail::after {
+  content: '';
+  position: absolute;
+  top: 24px;
+  bottom: -8px;
+  width: 1px;
+  background: var(--cds-border-strong-01);
+}
+
+.cx-chain__dot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-strong-01);
+  font-family: var(--cx-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--cds-text-secondary);
+}
+
+.cx-chain__node[data-role='root'] .cx-chain__dot {
+  background: var(--cx-critical-tint);
+  border-color: var(--cx-critical);
+  color: var(--cx-critical);
+}
+
+.cx-chain__node[data-role='intermediate'] .cx-chain__dot {
+  background: var(--cx-high-tint);
+  border-color: var(--cx-high);
+  color: var(--cx-high);
+}
+
+.cx-chain__node[data-role='symptom'] .cx-chain__dot {
+  background: var(--cds-layer-02);
+  border-color: var(--cds-border-strong-01);
+  color: var(--cx-text-primary);
+}
+
+.cx-chain__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-3xs);
+  min-width: 0;
+}
+
+.cx-chain__role {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cds-text-placeholder);
+}
+
+.cx-chain__node[data-role='root'] .cx-chain__role {
+  color: var(--cx-critical);
+}
+
+.cx-chain__node[data-role='intermediate'] .cx-chain__role {
+  color: var(--cx-high);
+}
+
+.cx-chain__method {
+  font-family: var(--cx-font-mono);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--cx-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.cx-chain__loc {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--cx-font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--cds-link-primary);
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.cx-chain__loc:hover {
+  text-decoration: underline;
+}
+
+.cx-chain__desc {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--cds-text-secondary);
+}
+
+// ===========================================================================
+// Fix
+// ===========================================================================
+
+.cx-fix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-sm);
+  min-height: 0;
+}
+
+.cx-fix__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cx-space-sm);
+}
+
+.cx-fix__origin {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--cds-text-placeholder);
+  min-width: 0;
+}
+
+.cx-fix__origin > svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: currentColor;
+}
+
+.cx-fix__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
+  flex-wrap: wrap;
+}
+
+.cx-fix__note {
+  display: flex;
+  gap: var(--cx-space-sm);
+  padding: var(--cx-space-md);
+  border: 1px dashed var(--cds-border-strong-01);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--cds-text-secondary);
+}
+
+.cx-fix__note > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 2px;
+  fill: var(--cds-text-placeholder);
+}
