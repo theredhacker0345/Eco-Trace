@@ -30,6 +30,8 @@
     <symbol id="i-file" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M3.4 1.4h6l3.2 3.2v10H3.4zm1.5 1.5v10.2h6V5.6H8.4V2.9z"/></symbol>
     <symbol id="i-settings" viewBox="0 0 16 16"><path d="M1 2.9h14v1.7H1zM1 7.15h14v1.7H1zM1 11.4h14v1.7H1zM3.6 1.6h2.1v4.3H3.6zM8.5 5.85h2.1v4.3H8.5zM5.8 9.1h2.1v4.3H5.8z"/></symbol>
     <symbol id="i-download" viewBox="0 0 16 16"><path d="M7.25 1.4h1.5v6.1l2.4-2.4 1.06 1.06L8 10.36 3.79 6.16 4.85 5.1l2.4 2.4zM1.4 11.2h3.1v1.5h7v-1.5h3.1v3.2H1.4z"/></symbol>
+    <symbol id="i-document" viewBox="0 0 16 16"><path d="M9 1.4H3.6v13.2h8.8V4.8zm0 1.6 2 2H9zm-4 6h6v1.4H5zm0 2.8h6v1.4H5z"/></symbol>
+    <symbol id="i-print" viewBox="0 0 16 16"><path d="M4.4 1.4h7.2v3H4.4zm-2.6 4.4h12.4v6h-2.1v3.2H3.9v-3.2H1.8zm3.6 3.2h5.2v1.6H5.4z"/></symbol>
     <symbol id="i-play" viewBox="0 0 16 16"><path d="M4.2 2.3 13 8l-8.8 5.7z"/></symbol>
     <symbol id="i-stop" viewBox="0 0 16 16"><path d="M3.4 3.4h9.2v9.2H3.4z"/></symbol>
     <symbol id="i-copy" viewBox="0 0 16 16"><path d="M5.6 1.4h9v9h-1.5V2.9H5.6zM1.4 5.1h9v9.5h-9z"/></symbol>
@@ -121,6 +123,16 @@
       <button id="btn-export" class="cx-btn cx-btn--primary cx-btn--sm" disabled>
         <svg class="i"><use href="#i-download" /></svg>
         Export report
+      </button>
+
+      <button id="btn-export-pdf" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled
+              title="Export a printable PDF (Ctrl+Shift+E)" aria-label="Export PDF report">
+        <svg class="i"><use href="#i-print" /></svg>
+      </button>
+
+      <button id="btn-export-open" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled
+              title="Open the report in your browser (Ctrl+Shift+P)" aria-label="Open report in browser">
+        <svg class="i"><use href="#i-launch" /></svg>
       </button>
 
       <button id="btn-toggle-inspector" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm cx-under-1280"
@@ -276,7 +288,7 @@
             <label class="visually-hidden" for="input-scope">Filter scope</label>
             <select id="input-scope">
               <option value="all">All files</option>
-              <option value="flagged">Flagged files only</option>
+              <option value="serious">Critical + High</option>
               <option value="selected">Selected file</option>
             </select>
             <svg class="cx-select__chevron"><use href="#i-chevron-down" /></svg>

@@ -10,7 +10,7 @@
  * re-skinnable.
  */
 
-import type { CallGraph, FileContent, Finding } from "../analyzer/static.js";
+import type { FileContent, Finding } from "../analyzer/static.js";
 import type { GradeResult } from "../grader/grade.js";
 import { getDefaultSettings, type AppSettings } from "../settings.js";
 
@@ -43,10 +43,15 @@ export interface AppState {
   selectedIndex: number;
   /** Absolute path of the file the user scoped the table to, if any. */
   selectedFile: string | null;
-  callGraph: CallGraph | null;
   analyzing: boolean;
   settings: AppSettings;
   device: DeviceState;
+  /**
+   * Application ids declared by the project's AndroidManifest.xml, used to
+   * attribute measured drain to the app under test rather than to the device
+   * as a whole.
+   */
+  manifestPackageNames: string[];
 }
 
 export const state: AppState = {
@@ -56,10 +61,10 @@ export const state: AppState = {
   grade: null,
   selectedIndex: -1,
   selectedFile: null,
-  callGraph: null,
   analyzing: false,
   settings: getDefaultSettings(),
   device: "idle",
+  manifestPackageNames: [],
 };
 
 type Handler = () => void;

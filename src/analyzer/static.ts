@@ -45,6 +45,13 @@ export interface CallGraph {
   callers: Map<string, CallEdge[]>;
   // file+method → list of call edges it makes
   calls: Map<string, CallEdge[]>;
+  // absolute path → comment-stripped source, so chain tracing can resolve the
+  // method that encloses a finding without re-reading the project. Carried on
+  // the graph rather than in module scope: a module-level map is shared by
+  // every graph the process ever builds, so tracing a chain from a graph that
+  // was not the most recent analyse silently resolved method names against
+  // whichever project happened to be loaded last.
+  sources: Map<string, string>;
 }
 
 export interface ChainNode {
@@ -910,6 +917,7 @@ function detectA06(f: FileContent): Finding[] {
 export function buildCallGraph(files: FileContent[]): CallGraph {
   const callers = new Map<string, CallEdge[]>();
   const calls = new Map<string, CallEdge[]>();
+  const sources = new Map<string, string>();
 
   const methodDefRe =
     /(?:fun\s+|(?:public|private|protected|static|void|override)\s+(?:\w+\s+)*)(\w+)\s*\(/g;
@@ -917,6 +925,7 @@ export function buildCallGraph(files: FileContent[]): CallGraph {
 
   for (const f of withoutComments(files)) {
     const ls = lines(f.content);
+    sources.set(f.path, f.content);
     let currentMethod = "<top>";
 
     for (let i = 0; i < ls.length; i++) {
@@ -966,7 +975,7 @@ export function buildCallGraph(files: FileContent[]): CallGraph {
     }
   }
 
-  return { callers, calls };
+  return { callers, calls, sources };
 }
 
 // ---------------------------------------------------------------------------
@@ -983,7 +992,7 @@ export function traceCallChain(
   callGraph: CallGraph,
   maxHops = 6
 ): ChainNode[] {
-  const symptomMethod = detectMethodAtLine(finding);
+  const symptomMethod = detectMethodAtLine(finding, callGraph.sources);
   const chain: ChainNode[] = [
     {
       file: finding.file,
@@ -1027,14 +1036,14 @@ export function traceCallChain(
   return chain;
 }
 
-function detectMethodAtLine(f: Finding): string {
+function detectMethodAtLine(f: Finding, sources: Map<string, string>): string {
   // Walk up from the finding's line in the file to find the nearest enclosing
   // method definition. This gives us the actual containing method rather than
   // extracting a name from the causalChainHint text (which points to a callee,
   // not the containing method).
-  const file = allFilesForChain.get(f.file);
-  if (file) {
-    const ls = lines(file.content);
+  const content = sources.get(f.file);
+  if (content) {
+    const ls = lines(content);
     const methodDefRe =
       /(?:fun\s+|(?:public|private|protected|static|void|override)\s+(?:\w+\s+)*)(\w+)\s*\(/;
     for (let i = Math.min(f.line - 1, ls.length - 1); i >= 0; i--) {
@@ -1052,9 +1061,6 @@ function detectMethodAtLine(f: Finding): string {
   return hintMatch ? hintMatch[1] : f.patternId.toLowerCase() + "_site";
 }
 
-// File content lookup used by detectMethodAtLine — populated by analyzeProject
-const allFilesForChain = new Map<string, FileContent>();
-
 // ---------------------------------------------------------------------------
 // Main orchestrator
 // ---------------------------------------------------------------------------
@@ -1069,10 +1075,6 @@ export function analyzeProject(files: FileContent[]): Finding[] {
   const scan = withoutComments(files);
   const originalByPath = new Map<string, string>();
   for (const f of files) originalByPath.set(f.path, f.content);
-
-  // Populate the file map used by detectMethodAtLine / traceCallChain
-  allFilesForChain.clear();
-  for (const f of scan) allFilesForChain.set(f.path, f);
 
   for (const f of scan) {
     results.push(...detectW01(f));

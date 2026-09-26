@@ -341,11 +341,15 @@ export function initNavigator(): void {
 
     const file = target.closest<HTMLElement>(".cx-tree__file");
     if (file?.dataset.path) {
-      state.selectedFile = file.dataset.path;
+      // The tree does not own the selection — it announces it. main.ts decides
+      // what a click means (scope the table, or clear the scope if the same
+      // file is clicked twice) and the state change comes back around through
+      // `subscribe`, which is what re-renders the highlight. Setting the field
+      // here as well used to make the toggle in main.ts see its own write and
+      // immediately undo it, so clicking a file silently did nothing.
       document.dispatchEvent(
         new CustomEvent("ecotrace:select-file", { detail: file.dataset.path })
       );
-      syncSelection();
     }
   });
 

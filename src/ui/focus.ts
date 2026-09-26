@@ -176,8 +176,13 @@ export function installKeymap(shortcuts: Shortcut[]): void {
     const shortcut = byChord.get(chord);
     if (!shortcut) return;
     if (!shortcut.allowInInput && isTypingTarget(event.target)) return;
-    // Never hijack the browser's own chords.
-    if (event.key === "F5" || event.key === "F12") return;
+    // Never hijack a chord the host owns *and* that we have not bound. A bare
+    // F5 is a reload in every host, so the analyzer is bound to it explicitly
+    // and the guard below lets a registered F5 through — the previous version
+    // returned on F5 unconditionally, which silently made the documented
+    // "F5 analyze" shortcut unreachable. F12 stays unbound and is still the
+    // host's.
+    if (event.key === "F12") return;
     event.preventDefault();
     event.stopPropagation();
     shortcut.run();

@@ -31,6 +31,7 @@
 [Download EXE](https://github.com/theredhacker0345/Eco-Trace/releases) &nbsp;|&nbsp;
 [Build from Source](#build-from-source) &nbsp;|&nbsp;
 [How It Works](#how-it-works) &nbsp;|&nbsp;
+[The Report](#the-report) &nbsp;|&nbsp;
 [Setup Guide](SETUP.md)
 
 </div>
@@ -57,24 +58,37 @@ MainActivity.onCreate()
             -> GPS.requestSingleUpdate()  <- FINE accuracy, 3x battery cost
 ```
 
-No linter sees this chain. No retrieval-based AI sees this chain. **IBM Bob 2.0 sees this chain** -- because it holds your entire repository in active reasoning simultaneously.
+No linter sees this chain. No retrieval-based AI sees this chain.
+
+EcoTrace traces it in **two tiers**, and this distinction matters:
+
+| Tier | Runs | Needs a key? | What it contributes |
+|---|---|:---:|---|
+| **Local call-graph tracer** | Always, on every scan | No | Builds a real cross-file call graph from the sources and walks back from each finding to the lifecycle entry point that put it there. Works offline, costs nothing, is reproducible. |
+| **IBM Bob 2.0** | Only if you paste a key | Yes | Holds the whole repository in one reasoning pass, so it can revise a severity, correct a description, and write a fix written *against that specific chain* — including for defects the local pass attributed to the wrong method. |
+
+The local tracer is what makes the feature work for everyone. Bob is what makes
+it sharper. A tool that only works when you hand it an API key is a demo, so the
+chain, the grade, the history and the whole report are all produced with Bob
+switched off.
 
 ---
 
 ## Why IBM Bob 2.0 -- and Why Nothing Else Can Do This
 
-| Tool | How it reads your codebase | Traces 6-file call chains? |
+| Tool | How it reads your codebase | Traces multi-file call chains? |
 |---|---|:---:|
 | Android Profiler | Runtime only, no source analysis | No |
 | SonarQube / Lint | Single-file pattern matching | No |
 | GPT-4o / Gemini | Chunked context, loses cross-file links at scale | Partially |
 | Cursor / Copilot | Embedding retrieval, misses non-obvious dependencies | Partially |
-| Claude Code | Serial file reading, reasons from memory not live context | Partially |
-| **IBM Bob 2.0** | **Full repository context as a first-class primitive** | **Yes** |
+| **EcoTrace (local)** | Builds a real call graph from every indexed source | **Yes, offline** |
+| **EcoTrace + IBM Bob 2.0** | Full repository as a first-class primitive, plus the local graph | **Yes, and writes a fix per chain** |
 
-Bob 2.0 loads your entire project simultaneously -- every file, every import, every call site -- active in one reasoning pass. This is the only architecture that makes causal chain tracing structurally possible.
-
-Without Bob, EcoTrace is a linter. **With Bob, EcoTrace is a reasoning engine that understands your entire app architecture.**
+The local tracer is what no linter on the table does: it is a genuine call
+graph over the whole project, not a per-file scan. Bob 2.0 adds the layer a
+call graph cannot reach — reasoning about whether the traced path is the one
+that actually matters, and rewriting the fix for that path.
 
 ---
 
@@ -133,9 +147,13 @@ EcoTrace scans every `.java` and `.kt` file in your Android project for 23 known
 
 ---
 
-### 2. Causal Chain Tracing -- Bob's Exclusive Capability
+### 2. Causal Chain Tracing
 
-For every **Critical** finding, Bob traces backwards through your call graph to identify the architectural root cause -- not just the symptom file.
+For every finding, EcoTrace walks the call graph backwards from the offending
+line to the lifecycle entry point that put it on the path — the root cause, not
+just the symptom file. This runs locally by default; when Bob is configured it
+can refine the traced path and write a fix for that specific chain rather than a
+generic one.
 
 ```
 [CRITICAL CHAIN DETECTED]
@@ -166,13 +184,23 @@ Impact:        0.4 mAh/min reduction -> Grade: C to B
 
 Connect an Android device via USB. EcoTrace runs `adb shell dumpsys batterystats` before and after a real usage session, then:
 
-- Calculates exact mAh delta and drain rate
+- **Attributes drain to your app**, using batterystats' own per-package mAh
+  accounting at 0.1 mAh resolution. The package under test is read from the
+  project's `AndroidManifest.xml`, so the figure is the app's drain rather than
+  the handset's
+- Falls back to the battery charge level when per-app accounting is unavailable,
+  and **says so with its resolution attached** — one percentage point is 30 mAh
+  on a typical cell, which is not a two-decimal-place measurement
 - Identifies which processes consumed the most battery
 - Measures CPU wakeups per hour
 - Detects Doze mode violations
 - Tracks network type changes (WiFi vs Mobile)
 - Measures screen-off vs screen-on drain ratio
 - **Cross-references with static findings** -- confirms which anti-patterns are actively firing
+
+Every one of these numbers carries its provenance through to the exported
+report, because a figure whose origin is unknown is a figure nobody should act
+on.
 
 ---
 
@@ -236,7 +264,11 @@ institutional software rather than as a dark-themed demo.
 - Full keyboard operation: `Ctrl+K` commands, `F5` analyze, `Alt+↑/↓` step
   through findings, `/` search, `Esc` closes, splitters resize with arrows.
 - Selection is bidirectional — picking a finding reveals its file in the tree,
-  picking a file scopes the table to it.
+  picking a file scopes the table to it, and picking the same file again leaves
+  the scope. The selected file and the table's scope mode are owned in one
+  place, so the three views cannot disagree about what "selected" means.
+- The analysis runs on a **worker thread**, so the window stays live during a
+  scan: the run log scrolls, the splitters drag, the table still sorts.
 - ARIA tree, tablist, tablists and live regions throughout; focus rings are
   Carbon's 2px theme-focus token; `prefers-reduced-motion` and Windows
   high-contrast are both honoured.
@@ -245,7 +277,58 @@ The exported report uses Carbon's **white** theme — it is read in daylight,
 printed and archived rather than worked in at night — and embeds IBM Plex as a
 data URI so it renders identically for every recipient.
 
+---
 
+## The Report
+
+Ten sections, typeset for A4 as well as for a screen, and honest about its own
+numbers.
+
+1. **Verdict** — one paragraph, quotable in a review, generated from the numbers
+   rather than picked from a list so it cannot drift out of sync with the grade
+2. **Ranked plan** — the six critical/high findings, most severe first
+3. **Score breakdown** — the three weighted components, plus the grade table
+4. **At a glance** — sources, findings, files affected, drain with its
+   provenance, longest chain, detectors run
+5. **Distribution by category** — stacked severity bar and a per-category table
+6. **Causal chain** — the deepest chain in the scan as a root → propagation →
+   symptom diagram. A single-file tool can only report the line the defect is
+   on; this is the part that has to change for the symptom to stop recurring
+7. **All findings** — grouped by category, each with source, its own traced
+   chain, and a fix
+8. **Detector coverage** — all 23 rules and what each found. A rule that found
+   nothing is shown as a **zero, not omitted**: "checked and clean" is a result,
+   and hiding it makes the document indistinguishable from one that never ran
+   the check
+9. **Device profile** — top CPU consumers, new wakelocks, Doze violations, CPU
+   wakeup alarms
+10. **Method and limits** — how the score is computed and what the known blind
+    spots are. The fastest way to lose an expert reader is a number they cannot
+    trust.
+
+### Three ways out
+
+| Action | Shortcut | Output |
+|--------|----------|--------|
+| **Export report** | `Ctrl+E` | Standalone HTML — attach to a ticket, commit, archive. No network needed. |
+| **PDF** | `Ctrl+Shift+E` | PDF via the print dialog |
+| **Open in browser** | `Ctrl+Shift+P` | The default browser, with its own print controls |
+
+The PDF is produced by handing the document to the host's print pipeline and
+choosing **Microsoft Print to PDF** or **Save as PDF**. That is deliberate:
+it yields real vector text — selectable, searchable, correctly hinted — whereas
+the only alternative available inside a webview is a canvas rasteriser, which
+produces an unsearchable image of the page. Tauri exposes no programmatic
+print-to-file, and going lower level means binding Windows COM interfaces
+coupled to the WebView2 runtime version.
+
+The document is already laid out for paper when the dialog opens. The print
+stylesheet declares the page size and margins, a running footer with page
+counters (WebView2 is Chromium, so these are real), and `break-inside: avoid`
+for every card, table, code block and chain node. Findings print **expanded** —
+a collapsed row in a PDF would be a finding the reader cannot see.
+
+---
 ---
 
 ## Grading System
@@ -285,49 +368,60 @@ We ran EcoTrace against [Signal Android](https://github.com/signalapp/Signal-And
 > recorded in [`bob_sessions/session-07-fix-engine.json`](bob_sessions/session-07-fix-engine.json)
 > (the 43-second timing is not recorded there). No automated test or benchmark script in
 > this repo reproduces them, so treat them as an illustrative record rather than a
-> reproducible measurement.
+> reproducible measurement. The analysis has since moved to a worker thread, so wall-clock
+> time to *result* is now different from time to *visible progress* — the window stays
+> interactive throughout.
 
 ---
 
 ## Architecture
 
 ```
-+-----------------------------------------------------+
-|                  EcoTrace Desktop App               |
-|                  (Tauri 2.0 + TypeScript)           |
-+--------------+------------------+-------------------+
-|   Project    |  Intelligence    |   Fix Station     |
-|  Navigator   |  Feed            |                   |
-|              |                  |  Finding detail   |
-|  Files with  |  Bob reasoning   |  Causal chain     |
-|  findings    |  streaming live  |  Generated fix    |
-|  highlighted |                  |  Copy to clipboard|
-+--------------+------------------+-------------------+
-|        Energy Vitals Bar (always visible)           |
-|   Grade  |  Drain Rate  |  Critical Count  |  High Count  |
-+-----------------------------------------------------+
-        |                          |
-        v                          v
-  +-----------+            +---------------+
-  | IBM Bob   |            |  ADB Bridge   |
-  | 2.0       |            |  (Rust/Tauri) |
-  |           |            |               |
-  | Full repo |            | dumpsys       |
-  | context   |            | parser        |
-  | reasoning |            | dynamic       |
-  | 23 pattern|            | profiler      |
-  | call chain|            |               |
-  | tracing   |            |               |
-  +-----------+            +---------------+
-        |                          |
-        +------------+-------------+
-                     v
-              +--------------+
-              |  Grader +    |
-              |  Scan History|
-              |  (local JSON)|
-              +--------------+
++---------------------------------------------------------------+
+|  EcoTrace — Tauri 2.0 + TypeScript                           |
++------------------+------------------------+-----------------+
+|  Navigator       |  Findings table       |  Inspector      |
+|  Project tree    |  sort · filter ·      |  Rule · source  |
+|  severity-coded  |  expand rows          |  Causal chain   |
+|  click to scope  |  -------------------- |  Fix · Copy     |
+|                  |  Run log (phases,     |  (3 tabs)       |
+|                  |  timings, errors)     |                 |
++------------------+------------------------+-----------------+
+|  Status bar: grade · drain + provenance · findings · Bob status   |
++---------------------------------------------------------------+
+        |                                    |
+        v                                    v
++-------------------+            +--------------------+
+| Static analyzer   |            | ADB bridge         |
+| 23 detectors +    |            |  dumpsys           |
+| call-graph tracer |            |  batterystats      |
+| (Web Worker)      |            |  per-package mAh   |
++-------------------+            +--------------------+
+        |                                    |
+        +----------------+-------------------+
+                         v
+              +---------------------------+
+              |  IBM Bob 2.0 (OPTIONAL)    |
+              |  severity revision ·       |
+              |  per-chain fixes            |
+              |  only if a key is provided  |
+              +---------------------------+
+                         v
+              +---------------------------+
+              |  Grader + scan history     |
+              |  (%APPDATA%\ecotrace)      |
+              +---------------------------+
+                         v
+              +---------------------------+
+              |  Report: HTML · PDF ·     |
+              |  browser                  |
+              +---------------------------+
 ```
+
+The analyzer runs on a **Web Worker**, so the window stays live during a scan —
+the run log scrolls, the splitters drag, the table still sorts. That matters for
+more than polish: when the work was on the UI thread, the window froze, and a
+frozen window cannot report its own progress, so a long scan looked like a hang.
 
 ---
 
@@ -336,9 +430,10 @@ We ran EcoTrace against [Signal Android](https://github.com/signalapp/Signal-And
 | Layer | Technology | Why |
 |---|---|---|
 | Desktop shell | Tauri 2.0 | 3-8 MB binary, no Electron bloat, native OS integration |
-| App logic | TypeScript 5.0 | Strong types, fast iteration, Bob's strongest language |
-| System layer | Rust (minimal) | ADB subprocess, file system access via Tauri commands |
-| AI engine | IBM Bob 2.0 | Full-repo context reasoning -- structurally irreplaceable |
+| App logic | TypeScript 5.0 | Strong types, fast iteration |
+| System layer | Rust (minimal) | Four rooted commands: `walk_dir`, `read_file`, `read_text`, `read_manifest` |
+| Analysis thread | Web Worker | Keeps 23 detector passes + call-graph build off the UI thread |
+| AI engine | IBM Bob 2.0 (optional) | Severity revision and per-chain fixes — the product is fully functional without it |
 | Storage | Local JSON | Scan history, offline-first, zero cloud dependencies |
 | Design system | IBM Carbon Design System (`@carbon/styles`) | Tokens, type, motion and component anatomy from the system IBM ships its own products on |
 | Styling | Sass, compiled by Vite | Design tokens are generated from Carbon's theme maps rather than hand-written |
@@ -404,14 +499,20 @@ Eco-Trace/
 |   |   +-- format.ts        Path, number and date formatting
 |   |   +-- preview.ts       Dev-only browser harness (never in a release bundle)
 |   |   +-- report.html      Exported report template (IBM Plex embedded)
-|   +-- analyzer/static.ts   23-pattern static analysis engine
+|   +-- analyzer/
+|   |   +-- static.ts         23-pattern static analysis engine + call-graph tracing
+|   |   +-- worker.ts         Runs the detectors off the UI thread
+|   |   +-- runner.ts         Worker lifecycle, with an inline fallback
+|   +-- report/
+|   |   +-- payload.ts        Assembles the report's data contract
+|   |   +-- export.ts         HTML write, PDF via the print pipeline, open-in-browser
 |   +-- parser/dumpsys.ts    ADB output -> structured JSON
 |   +-- grader/grade.ts      Scoring engine + scan history storage
 |   +-- settings.ts          ADB path + API key persistence
 +-- tools/
 |   +-- embed-report-fonts.mjs   Re-embeds IBM Plex into the report template
 +-- src-tauri/
-|   +-- src/lib.rs           Rust commands: read_file, walk_dir
+|   +-- src/lib.rs           Rooted commands: walk_dir, read_file, read_text, read_manifest
 |   +-- src/main.rs          Binary entry point
 |   +-- tauri.conf.json      App config + window settings
 |   +-- Cargo.toml           Rust dependencies
@@ -437,8 +538,8 @@ All 7 IBM Bob 2.0 session exports live in [`/bob_sessions/`](bob_sessions/). The
 | `session-02-tauri-scaffold.json` | Tauri 2.0 Windows Project Scaffold | Tauri 2.0 shell + Rust bridge |
 | `session-03-dumpsys-parser.json` | ADB dumpsys batterystats Parser | ADB output parser (7 interfaces, 8 parsers) |
 | `session-04-static-analyzer.json` | 23-Pattern Static Analysis Engine | 23-pattern engine + call graph builder |
-| `session-05-grader-ui.json` | Grading Engine + Settings Store + UI | Grading engine + settings store + three-panel UI |
-| `session-06-call-chain.json` | Causal Chain Tracing + Fix Station UI | Causal chain tracing + Fix Station UI |
+| `session-05-grader-ui.json` | Grading Engine + Settings Store + UI | Grading engine + settings store + workbench shell |
+| `session-06-call-chain.json` | Causal Chain Tracing + Inspector UI | Causal chain tracing + finding inspector |
 | `session-07-fix-engine.json` | Fix Generation + Final Integration | Bob-generated code fix system |
 
 ---
@@ -457,9 +558,25 @@ All 7 IBM Bob 2.0 session exports live in [`/bob_sessions/`](bob_sessions/). The
 
 ## Why This Wins
 
-Most hackathon submissions use Bob as a smarter autocomplete. EcoTrace uses Bob for what **no other tool -- AI or otherwise -- can do**: simultaneous multi-file causal reasoning across a full Android codebase.
+Most hackathon submissions use Bob as a smarter autocomplete. EcoTrace uses it
+as what it is actually good at — reasoning over a whole repository at once —
+and, more importantly, does not *depend* on it.
 
-The call chain tracer is a publishable research contribution. The fix generator makes it immediately useful. The ADB integration makes it complete. And the scan-history store (already persisting every profiled scan) is the foundation for turning a one-shot analysis into a continuous improvement loop.
+Two things came out of building it that are worth calling out:
+
+- **A call-graph tracer that runs offline.** The chain in the diagram at the top
+  of this file is produced with no API key, no network, and no service. That
+  makes causal analysis a feature of the product rather than a demo condition.
+- **A report that is honest about its own numbers.** A drain rate derived from
+  the battery charge level is printed with its resolution attached, because a
+  30 mAh granularity is not a two-decimal-place measurement. A finding with no
+  traced chain says so instead of omitting the chain. The 23-rule coverage
+  matrix shows the rules that found nothing, as zeros. This is aimed at an expert
+  reader, and the fastest way to lose one is a number they cannot trust.
+
+The fix generator makes the findings immediately actionable, the ADB integration
+ties the static analysis to real runtime behaviour, and the scan-history store
+turns a one-shot analysis into a continuous improvement loop.
 
 **This is not a demo. This is a tool Android developers would actually install.**
 

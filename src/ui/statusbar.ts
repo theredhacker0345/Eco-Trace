@@ -76,10 +76,24 @@ function renderVitals(): void {
   qs("vitals-files").textContent = String(state.files.length);
 
   const exportBtn = qs<HTMLButtonElement>("btn-export");
-  exportBtn.disabled = state.findings.length === 0;
-  exportBtn.title = state.findings.length
-    ? "Write a self-contained HTML report"
-    : "Run an analysis first";
+  const noScan = state.findings.length === 0;
+  exportBtn.disabled = noScan;
+  exportBtn.title = noScan
+    ? "Run an analysis first"
+    : "Write a self-contained HTML report";
+
+  // The PDF and browser actions are gated on exactly the same condition, so
+  // they are enabled together. Leaving one of the three live while the others
+  // are dead reads as a broken button rather than as a deliberate gate.
+  const pdfBtn = qs<HTMLButtonElement>("btn-export-pdf");
+  pdfBtn.disabled = noScan;
+  pdfBtn.title = noScan ? "Run an analysis first" : "Print to a PDF (Ctrl+Shift+E)";
+
+  const openBtn = qs<HTMLButtonElement>("btn-export-open");
+  openBtn.disabled = noScan;
+  openBtn.title = noScan
+    ? "Run an analysis first"
+    : "Open the report in your browser (Ctrl+Shift+P)";
 }
 
 function setStatus(text: string, muted = true): void {

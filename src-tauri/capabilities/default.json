@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.tauri.app/v2/capabilities.json",
   "identifier": "default",
-  "description": "EcoTrace default capability — grants file system, shell, dialog, and path access",
+  "description": "EcoTrace default capability — app-data file access, the ADB subprocess, and dialogs. Source reading is deliberately absent: it goes through the walk_dir / read_file / read_manifest Rust commands, which root every path in the open project rather than trusting the webview with a filesystem scope.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -11,7 +11,10 @@
     "fs:allow-mkdir",
     "fs:allow-exists",
     "fs:scope-appdata-recursive",
-    "shell:allow-execute",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [{ "name": "adb", "cmd": ["shell", "dumpsys", "batterystats"] }]
+    },
     "shell:allow-open",
     "dialog:allow-open",
     "dialog:allow-save",

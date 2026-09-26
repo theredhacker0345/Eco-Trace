@@ -1,8 +1,19 @@
 import { defineConfig } from "vite";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const pkg = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8")
+) as { version?: string };
 
 export default defineConfig({
   // Tauri's dev server runs on a fixed port; disable host detection.
   clearScreen: false,
+  define: {
+    // Stamped into the exported report so a document can always be traced back
+    // to the build that produced it.
+    __ECOTRACE_VERSION__: JSON.stringify(pkg.version ?? "0.0.0"),
+  },
   server: {
     port: 5173,
     strictPort: true,

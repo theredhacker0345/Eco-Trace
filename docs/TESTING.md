@@ -15,6 +15,7 @@ A step-by-step guide for running, testing, and building EcoTrace — a Tauri 2.0
 7. [Building for Production](#7-building-for-production)
 8. [Known Issues & Workarounds](#8-known-issues--workarounds)
 9. [Test Fixtures](#9-test-fixtures)
+10. [Performance Characteristics](#10-performance-characteristics)
 
 ---
 
@@ -112,19 +113,32 @@ Static analysis works entirely from source files — no Android device required.
 
 4. **Verify the results UI**
    After a moment you should see:
-   - **Intelligence Feed** — streams findings in real time as they are detected
-   - **File tree** — files containing anti-patterns are highlighted in red (Critical), orange (High), or yellow (Medium)
+   - **Run log** (bottom panel) — records each phase of the scan, with timings
+   - **Findings table** (centre) — every finding, grouped by severity
+   - **File tree** (left) — files containing anti-patterns are highlighted in red (Critical), orange (High), or yellow (Medium)
    - **Grade badge** — an A–F battery health grade updates once analysis completes
 
-5. **Inspect a finding**
-   - Click any **Critical** finding in the Intelligence Feed
-   - The **Fix Station** panel should open on the right, showing:
-     - A causal chain explaining why the pattern drains battery
-     - Generated fix code you can apply directly
+5. **Verify selection is bidirectional**
+   - Click a row in the **findings table** → the file tree highlights that file
+   - Click that file in the **tree** → the table scopes to it and the scope
+     selector switches to **Selected file**
+   - Click the same file again → the scope returns to **All files**
+   - The **Critical + High** scope filters out medium findings
 
-6. **Test clipboard copy**
-   - In the Fix Station panel, click **"Copy"**
+6. **Inspect a finding**
+   - Click any **Critical** finding
+   - The **inspector** panel (right) shows the rule, the offending source, the
+     traced causal chain, and a recommended fix with a **Copy** action
+
+7. **Test clipboard copy**
+   - In the inspector, click **"Copy"**
    - Paste into a text editor and verify the fix code was copied correctly
+
+8. **Verify the UI stayed responsive during the scan**
+   - Start an analysis on a large project and drag the panel splitters, sort the
+     table, and scroll the run log *while it runs*. The analysis executes on a
+     worker thread, so all of these stay live. On a slow machine the scan should
+     be visibly reported as in progress rather than as a frozen window.
 
 ---
 
@@ -140,14 +154,22 @@ Static analysis works entirely from source files — no Android device required.
    - Reload the app (press `F5` in the Tauri window, or restart `cargo tauri dev`)
    - Reopen Settings — the ADB path you entered should still be there
    - You can also inspect the settings file directly:
-     ```
-     %APPDATA%\ecotrace\settings.json
-     ```
+      ```
+      %APPDATA%\ecotrace\settings.json
+      ```
 
-4. **API key masking**
-   - Enter any value in the API key field (e.g. `test-api-key-1234`)
-   - Click **Save**
-   - The field should display a masked value (e.g. `••••••••••••1234`), not the raw key
+4. **Note on the API key**
+   The key is stored as a `type="password"` field, so it is visually masked while
+   you type, but it is written to `settings.json` as plaintext. That is a
+   deliberate trade for a local single-user tool with no keychain dependency —
+   if that is not acceptable for your deployment, the storage layer is
+   `src/settings.ts` and the one function to change is `saveSettings`.
+
+5. **Test the connection indicator**
+   - With a key saved, click the Bob status chip in the header
+   - The status should move from `Not configured` to a live state
+   - Without a network connection it should report **Network error**, not a
+     silent failure
 
 ---
 
@@ -172,16 +194,23 @@ This section requires a physical Android device or a running Android emulator.
 
 1. Open EcoTrace and open an Android project (same as Section 3, steps 1–2)
 
-2. Click **"▶ Start Profile"** in the vitals bar
+2. Click **"▶ Start Profile"** in the toolbar above the findings table
 
 3. **Use your Android app** for 2–5 minutes — navigate screens, trigger background syncs, or run the features you want to profile
 
 4. Click **"■ Stop"** to end the profiling session
 
 5. **Verify the results**
-   - The **vitals bar** should now show a drain rate in **mAh/min**
    - The **grade badge** recalculates, incorporating both static findings and measured runtime drain
-   - If battery drain exceeds expected thresholds, new dynamic findings may appear in the Intelligence Feed
+   - The run log reports the drain rate together with **how it was measured**:
+     - `from batterystats per-app mAh` — resolution 0.1 mAh, scoped to the
+       packages named in the project's `AndroidManifest.xml`. This is the
+       trustworthy figure.
+     - `from charge level (±30 mAh resolution …)` — derived from the battery
+       percentage against a nominal 3000 mAh cell. Coarse; profile for longer to
+       tighten it. The report prints this caveat alongside the number.
+     - `no usable measurement in this window` — the battery did not move enough
+       to measure. Expected on a very short session.
 
 ---
 
@@ -189,22 +218,44 @@ This section requires a physical Android device or a running Android emulator.
 
 1. Complete a static analysis (Section 3) or a profiling session (Section 5)
 
-2. Click **"Export Report"**
+2. Pick a delivery path:
 
-3. Choose a save location in the file dialog — the report is saved as an `.html` file
+   | Action | Shortcut | Output |
+   |--------|----------|--------|
+   | **Export report** | `Ctrl+E` | Standalone `.html` file |
+   | **PDF** (printer icon) | `Ctrl+Shift+E` | PDF via the print dialog |
+   | **Open in browser** (launch icon) | `Ctrl+Shift+P` | HTML in the default browser |
 
-4. Open the saved file in any web browser
+3. **Verify the HTML report contains:**
+   - [ ] A grade hero (ring, letter, score) matching what the app showed
+   - [ ] A one-paragraph verdict, and a ranked "fix these first" plan
+   - [ ] Score breakdown with all three weighted components, plus the grade table
+   - [ ] At-a-glance metrics and a distribution-by-category breakdown
+   - [ ] The deepest causal chain, with root → propagation → symptom roles
+   - [ ] Every finding grouped by category, each with source, chain and fix
+   - [ ] The **full 23-rule coverage matrix**, including rules that found nothing
+   - [ ] Device profile (if one was recorded), including the drain provenance
+   - [ ] Score timeline (when 2+ scans are in the history)
+   - [ ] Method and limits, stating the known blind spots
 
-5. **Verify the report contains:**
-   - [ ] Grade badge (A–F) matching what was shown in the app
-   - [ ] Full findings list with severity levels
-   - [ ] Causal chain for at least one Critical finding
-   - [ ] Timeline section — the report template renders it only when the injected
-         scan payload contains **2 or more** history records, and the current
-         export path writes an empty `history` array, so expect this section to be
-         absent. See `docs/ecotrace-plan.md` Sub-Task 5.
+4. **Verify the PDF**
+   - Choose **Microsoft Print to PDF** or **Save as PDF**
+   - Confirm the document is typeset for A4, that no card or table is split
+     across a page, and that the footer carries the page number
+   - Open the PDF and try to **search for a finding name** — the text must be
+     selectable, which is the whole reason the print pipeline is used rather than
+     a canvas rasteriser
 
-> The exported report is fully self-contained HTML — no internet connection needed to view it.
+5. **Verify robustness**
+   - The report opens with no network access
+   - A finding whose description contains `</script>` does not truncate the
+     document (the exporter escapes `<` in the payload)
+   - Opening `src/ui/report.html` directly, with no payload attached, shows an
+     explicit "no scan data" notice rather than a plausible-looking fake scan
+
+> The exported report is fully self-contained HTML — no internet connection needed
+> to view it. The **Save as PDF** and **Expand all findings** buttons in the
+> report header are for whoever opens the file; they are hidden when printing.
 
 ---
 
@@ -295,6 +346,30 @@ const items = document.querySelectorAll('.finding');
 const items = Array.from(document.querySelectorAll('.finding'));
 ```
 If you see this error again after pulling new code, check that `Array.from()` is used consistently on any `NodeListOf` or `HTMLCollectionOf` values.
+
+---
+
+## 10. Performance Characteristics
+
+Three things decide whether EcoTrace feels light on a large project.
+
+**The analysis is off the UI thread.** `src/analyzer/worker.ts` runs the 23
+detector passes and the call-graph build in a Web Worker. On a project the size
+of a real app that is over a second of solid CPU; on the UI thread it would
+freeze the window, and a frozen window cannot report its own progress. If worker
+construction fails, `src/analyzer/runner.ts` falls back to inline execution, so
+the worst case is a slow scan rather than no scan. Verify: start an analysis and
+drag the splitters while it runs.
+
+**The directory walk prunes.** `walk_dir` never descends into `build/`, `.git/`,
+`node_modules/`, `out/`, `target/`, `dist/`, `generated/`, `external/`,
+`third_party/` or a dozen other generated or vendored trees, stops at 20 000
+files, and returns paths in a deterministic order so two runs produce the same
+table and the same report.
+
+**Reads are bounded and rooted.** Single files over 2 MB are refused, and every
+path is checked against the canonicalised project root after symlink
+resolution — so neither `..` segments nor a symlink can read outside the project.
 
 ---
 

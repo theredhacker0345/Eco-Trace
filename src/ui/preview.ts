@@ -17,7 +17,7 @@
  * bundle.
  */
 
-import { analyzeProject, buildCallGraph, traceCallChain } from "../analyzer/static.js";
+import { buildCallGraph, traceCallChain, analyzeProject } from "../analyzer/static.js";
 import type { FileContent } from "../analyzer/static.js";
 import { calculateGrade } from "../grader/grade.js";
 import { registerLocalChain } from "./inspector.js";
@@ -68,7 +68,6 @@ export async function mountPreview(): Promise<void> {
 
   const graph = buildCallGraph(files);
   const findings = analyzeProject(files);
-  state.callGraph = graph;
   state.findings = findings;
   sortFindings("severity", true);
 

@@ -26,24 +26,19 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Command } from "@tauri-apps/plugin-shell";
+import { tempDir } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 
 // The stylesheet is compiled from Sass and imported here rather than linked
 // from the document, so the build can resolve the Carbon Sass modules and
 // rewrite the bundled font URLs.
 import "./styles/index.scss";
 
-import {
-  analyzeProject,
-  buildCallGraph,
-  traceCallChain,
-  type CallGraph,
-  type ChainNode,
-  type FileContent,
-} from "./analyzer/static.js";
-import { parseDumpsys, computeDelta, type DumpsysResult } from "./parser/dumpsys.js";
+import { runAnalysisInWorker } from "./analyzer/runner.js";
+import type { ChainNode, FileContent } from "./analyzer/static.js";
+import { parseDumpsys, computeDelta, type DumpsysResult, type DumpsysDelta } from "./parser/dumpsys.js";
 import {
   calculateGrade,
   loadHistory,
@@ -53,13 +48,14 @@ import {
 } from "./grader/grade.js";
 import { loadSettings, saveSettings, type AppSettings } from "./settings.js";
 
-import reportTemplate from "./ui/report.html?raw";
+import { buildReportPayload } from "./report/payload.js";
+import { printToPdf, renderReport, revealReport, writeReport } from "./report/export.js";
 
 import { esc, qs, qsButton, qsInput, qsa } from "./ui/dom.js";
 import { installKeymap, type Shortcut } from "./ui/focus.js";
 import { initRunLog, log } from "./ui/runLog.js";
 import { initNavigator, revealFile } from "./ui/navigator.js";
-import { allFixes, initFindingsTable, resetFilters } from "./ui/findingsTable.js";
+import { allFixes, initFindingsTable, resetFilters, setScope } from "./ui/findingsTable.js";
 import {
   currentFixText,
   initInspector,
@@ -106,6 +102,16 @@ import {
 
 const BOB_API_BASE = "https://api.bob.ibm.com/v2";
 
+/**
+ * Version stamped into the exported report.
+ *
+ * Injected by Vite from package.json so the document and the application can
+ * never disagree about which build produced it — a report whose engine is
+ * unidentified is a report nobody can reproduce.
+ */
+const APP_VERSION: string =
+  typeof __ECOTRACE_VERSION__ === "string" ? __ECOTRACE_VERSION__ : "0.0.0-dev";
+
 /** A finding identity used to key Bob's enhancements onto local results. */
 const findingKey = (f: { patternId: string; file: string; line: number }): string =>
   `${f.patternId}|${f.file}|${f.line}`;
@@ -135,7 +141,6 @@ let history: ScanRecord[] = [];
 
 /** Bob-authored fixes, surfaced through the inspector module. */
 const bobFixes = new Map<string, string>();
-
 /** Local call-graph chains, cached so tab switching does not re-trace. */
 const localChains = new Map<string, ChainNode[]>();
 
@@ -216,6 +221,8 @@ function wireHeader(): void {
   qs("btn-landing-settings").addEventListener("click", openSettings);
   qs("btn-settings").addEventListener("click", openSettings);
   qs("btn-export").addEventListener("click", () => void exportReport());
+  qs("btn-export-pdf").addEventListener("click", () => void exportPdf());
+  qs("btn-export-open").addEventListener("click", () => void openReportInBrowser());
   qs("btn-analyze").addEventListener("click", () => void runAnalysis());
   qs("btn-history").addEventListener("click", () => openHistory(history));
   qs("bob-status").addEventListener("click", openSettings);
@@ -269,7 +276,7 @@ function wireWorkSurfaceSwitch(): void {
 
 function wireToolbar(): void {
   qs("btn-copy-fixes").addEventListener("click", async () => {
-    const text = allFixes(state.findings, (finding) => bobFixes.get(finding.patternId));
+    const text = allFixes(state.findings, (finding) => bobFixes.get(findingKey(finding)));
     if (!text) {
       notify("info", "Nothing to copy", "Run an analysis first.");
       return;
@@ -288,21 +295,27 @@ function wireToolbar(): void {
 
   // Selecting a file in the navigator scopes the table; selecting a finding
   // anywhere re-points the navigator. Selection is bidirectional by design.
+  //
+  // Both the selected file and the table's scope mode are owned here, not in
+  // the views. The views publish intent through events and read the result back
+  // out of the store, which is the only way the tree, the table and the
+  // inspector can be guaranteed to agree about what "selected" means.
   document.addEventListener("ecotrace:select-file", (event) => {
     const path = (event as CustomEvent<string>).detail;
-    state.selectedFile = state.selectedFile === path ? null : path;
-    const scopeSelect = qs<HTMLSelectElement>("input-scope");
-    scopeSelect.value = state.selectedFile ? "selected" : "all";
-    qs("btn-inspector-prev").toggleAttribute("disabled", state.findings.length === 0);
-    emit("findings", "selection");
+
+    // Clicking the file that is already scoped clears the scope, so the same
+    // gesture both enters and leaves the filtered view.
+    const alreadyScoped = state.selectedFile === path;
+    state.selectedFile = alreadyScoped ? null : path;
+    setScope(alreadyScoped ? "all" : "selected");
 
     if (state.selectedFile) {
       const first = state.findings.findIndex((f) => f.file === state.selectedFile);
       if (first >= 0) {
         state.selectedIndex = first;
-        emit("selection");
       }
     }
+    emit("findings", "selection");
   });
 
   document.addEventListener("ecotrace:selection-changed", () => {
@@ -354,7 +367,14 @@ async function loadProject(root: string): Promise<void> {
       "EcoTrace indexes .java and .kt files. Check that the folder is an Android project root."
     );
     state.files = [];
-    emit("files");
+    state.findings = [];
+    state.grade = null;
+    state.selectedIndex = -1;
+    state.selectedFile = null;
+    state.manifestPackageNames = [];
+    localChains.clear();
+    bobFixes.clear();
+    emit("files", "findings", "grade", "selection");
     return;
   }
 
@@ -362,7 +382,7 @@ async function loadProject(root: string): Promise<void> {
 
   const settled = await Promise.allSettled(
     paths.map(async (path) => {
-      const content = await invoke<string>("read_file", { path });
+      const content = await invoke<string>("read_file", { root, path });
       return {
         path,
         content,
@@ -383,9 +403,19 @@ async function loadProject(root: string): Promise<void> {
   state.grade = null;
   state.selectedIndex = -1;
   state.selectedFile = null;
+  state.manifestPackageNames = [];
   localChains.clear();
   bobFixes.clear();
   setProgressValue(0);
+
+  // The manifest tells us which package on the device is the one under test,
+  // which is what makes a measured drain rate attributable to this app rather
+  // than to the handset. It is a bounded read and cannot fail the load.
+  try {
+    state.manifestPackageNames = await invoke<string[]>("read_manifest", { root });
+  } catch {
+    state.manifestPackageNames = [];
+  }
 
   const kotlin = files.filter((f) => f.language === "kotlin").length;
   const projectName = root.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? root;
@@ -439,29 +469,27 @@ async function runAnalysis(): Promise<void> {
   try {
     // ── Phase 1: local static analysis ───────────────────────────────────
     // Always runs, needs no key, and is the only phase guaranteed to finish.
+    // It executes on a worker thread: 23 detector passes plus a call-graph
+    // build over the whole project is enough CPU to freeze the window, and a
+    // frozen window cannot report its own progress.
     log("info", "Phase 1 — evaluating 23 local energy detectors.");
-    const started = performance.now();
-    const graph: CallGraph = buildCallGraph(state.files);
-    state.callGraph = graph;
 
-    const local = analyzeProject(state.files);
-    state.findings = [...local];
+    const result = await runAnalysisInWorker(state.files);
+    state.findings = [...result.findings];
     // The canonical order is severity-first, and it is maintained in the store
     // so a row's index is its position everywhere it is shown.
     sortFindings("severity", true);
     setProgressValue(0.35);
     log(
       "success",
-      `Phase 1 complete — ${plural(local.length, "finding")} in ${Math.round(
-        performance.now() - started
-      )} ms.`
+      `Phase 1 complete — ${plural(state.findings.length, "finding")} in ${result.elapsedMs} ms.`
     );
 
-    // Cache a chain for every finding that has one, so switching inspector
-    // tabs is instant rather than re-walking the call graph each time.
-    for (const finding of local) {
-      const chain = traceCallChain(finding, graph);
-      if (chain.length > 0) {
+    // Publish the chains the worker already traced, so tab switching does not
+    // re-walk the call graph.
+    for (const finding of state.findings) {
+      const chain = result.chains[findingKey(finding)];
+      if (chain) {
         localChains.set(findingKey(finding), chain);
         registerLocalChain(finding, chain);
       }
@@ -703,9 +731,24 @@ function applyBobFindings(bob: BobFinding[]): void {
   const matched = new Set<string>();
 
   state.findings = state.findings.map((finding) => {
-    const hit = byIdentity.get(findingKey(finding));
+    const key = findingKey(finding);
+    const hit = byIdentity.get(key);
     if (!hit) return finding;
-    matched.add(findingKey(finding));
+    matched.add(key);
+
+    // The fix and the chain are attached *per finding*, keyed on rule + file +
+    // line. Keying them on the rule id alone applied the first occurrence's
+    // chain-specific fix to every other occurrence of the same rule in the
+    // repository — the inspector then labelled it "generated for this call
+    // chain" when it had been generated for a different file entirely.
+    if (hit.fix) {
+      bobFixes.set(key, hit.fix);
+      registerBobFix(finding, hit.fix);
+    }
+    if (hit.causalChain?.length) {
+      registerBobChain(finding, hit.causalChain);
+    }
+
     return {
       ...finding,
       severity: hit.severity ?? finding.severity,
@@ -714,17 +757,7 @@ function applyBobFindings(bob: BobFinding[]): void {
     };
   });
 
-  for (const item of bob) {
-    if (item.fix) {
-      bobFixes.set(item.patternId, item.fix);
-      registerBobFix(item.patternId, item.fix);
-    }
-    if (item.causalChain?.length) {
-      registerBobChain(item.patternId, item.causalChain);
-    }
-  }
-
-  const enriched = [...matched].length;
+  const enriched = matched.size;
   const orphaned = bob.length - enriched;
   log(
     "system",
@@ -823,18 +856,33 @@ async function stopProfile(): Promise<void> {
 
   const delta = computeDelta(adbBefore, after);
   adbBefore = null;
+  // Kept for the report: the exported document shows the measured drain with
+  // its provenance, which is only possible if the delta outlives this function.
+  lastMeasurement = delta;
   resetDevice();
 
   const grade: GradeResult = calculateGrade(state.findings, delta.drainRateMahPerMin);
   state.grade = grade;
   emit("grade");
-  setStatusText(`Grade ${grade.letter} · ${grade.drainRateMahPerMin.toFixed(2)} mAh/min`, {
-    muted: false,
-  });
+
+  const measured = delta.drainRateMahPerMin.toFixed(2);
+  setStatusText(`Grade ${grade.letter} · ${measured} mAh/min`, { muted: false });
+
+  const provenance =
+    delta.source === "app-estimator"
+      ? "from batterystats per-app mAh"
+      : delta.source === "charge-level"
+        ? `from charge level (±${delta.resolutionMah.toFixed(0)} mAh resolution — profile longer for a tighter figure)`
+        : "no usable measurement in this window";
 
   log(
     "success",
-    `Drain rate ${delta.drainRateMahPerMin.toFixed(2)} mAh/min over ${delta.elapsedMinutes.toFixed(1)} min. Grade ${grade.letter}.`
+    `Drain rate ${measured} mAh/min over ${delta.elapsedMinutes.toFixed(1)} min, ${provenance}. Grade ${grade.letter}.`
+  );
+  notify(
+    grade.letter === "F" || grade.letter === "D" ? "warning" : "success",
+    `Measured ${measured} mAh/min`,
+    `Composite grade moved to ${grade.letter} (${grade.numericScore}/100) — ${provenance}.`
   );
   notify(
     grade.letter === "F" || grade.letter === "D" ? "warning" : "success",
@@ -876,10 +924,37 @@ async function runDumpsys(): Promise<DumpsysResult | null> {
     ]);
     const output = await command.execute();
     if (output.code !== 0) return null;
-    return parseDumpsys(output.stdout);
+    return parseDumpsys(output.stdout, adbWatchlist());
   } catch {
     return null;
   }
+}
+
+/**
+ * The packages the drain measurement should be attributed to.
+ *
+ * batterystats only prints a package name in its per-uid mAh rows when the
+ * package happens to be resolvable, and the app under test is the one worth
+ * watching. Rather than ask the developer to type a package name, the
+ * watchlist is derived: the most likely application id of the opened project
+ * (read from its manifest if there is one) plus whatever ids the dumpsys
+ * output itself already resolved. An empty watchlist is fine — computeDelta
+ * falls back to the charge-level estimator and says so.
+ */
+function adbWatchlist(): string[] {
+  const found = new Set<string>();
+
+  for (const entry of state.manifestPackageNames) found.add(entry);
+
+  // Application ids that already appeared in a previous snapshot.
+  if (adbBefore) for (const pkg of adbBefore.appPackages) found.add(pkg);
+  for (const entry of adbBefore?.perUid ?? []) {
+    if (entry.packageName && entry.packageName.includes(".")) {
+      found.add(entry.packageName);
+    }
+  }
+
+  return [...found].slice(0, 12);
 }
 
 // ---------------------------------------------------------------------------
@@ -984,8 +1059,20 @@ function wireSettings(): void {
 // Report export
 // ---------------------------------------------------------------------------
 
+/** The most recent device measurement, carried into the report if there is one. */
+let lastMeasurement: DumpsysDelta | null = null;
+
+function reportBasename(): string {
+  const project = (state.projectPath ?? "project")
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)[0]
+    .replace(/[^\w.-]+/g, "-")
+    .toLowerCase();
+  return `ecotrace-${project}-${new Date().toISOString().slice(0, 10)}`;
+}
+
 /**
- * Writes a self-contained HTML report.
+ * Builds the document.
  *
  * The template is imported as a raw string at build time rather than fetched
  * at runtime. Fetching `/src/ui/report.html` worked in the dev server and
@@ -993,64 +1080,118 @@ function wireSettings(): void {
  * was broken in every shipped build — the kind of defect that only surfaces
  * after release.
  */
+function buildReportHtml(): string {
+  const payload = buildReportPayload({
+    state,
+    grade: state.grade ?? calculateGrade(state.findings, 0),
+    history,
+    chains: localChains,
+    bobFixes,
+    measurement: lastMeasurement,
+    version: APP_VERSION,
+  });
+  return renderReport(payload);
+}
+
+/** Writes the report as a standalone HTML file and opens it. */
 async function exportReport(): Promise<void> {
-  if (state.findings.length === 0) {
-    notify("info", "Nothing to export", "Run an analysis first.");
-    return;
-  }
+  if (!reportReady()) return;
 
   try {
-    const graph = state.callGraph ?? buildCallGraph(state.files);
-    const worst = [...state.findings].sort(
-      (a, b) => severityRank(a.severity) - severityRank(b.severity)
-    )[0];
-    const chain = worst && state.files.length ? traceCallChain(worst, graph) : [];
+    setBusy("Building report");
+    const html = buildReportHtml();
 
-    const payload = {
-      projectPath: state.projectPath ?? "Unknown",
-      timestamp: Date.now(),
-      filesIndexed: state.files.length,
-      grade: state.grade ?? calculateGrade(state.findings, 0),
-      findings: state.findings.slice(0, 100).map((finding) => ({
-        ...finding,
-        file: relPath(finding.file, state.projectPath),
-        fix: bobFixes.get(finding.patternId) ?? undefined,
-      })),
-      chain: chain.map((node) => ({
-        ...node,
-        file: relPath(node.file, state.projectPath),
-      })),
-      history: history.slice(0, 12).map((record) => ({
-        timestamp: record.timestamp,
-        grade: { letter: record.grade.letter, numericScore: record.grade.numericScore },
-      })),
-    };
-
-    const injected = reportTemplate.replace(
-      '<script id="scan-data" type="application/json"></script>',
-      `<script id="scan-data" type="application/json">${JSON.stringify(
-        payload
-      ).replace(/</g, "\\u003c")}</script>`
-    );
-
-    const target = await saveDialog({
-      title: "Save EcoTrace report",
-      defaultPath: `ecotrace-report-${new Date().toISOString().slice(0, 10)}.html`,
-      filters: [{ name: "HTML report", extensions: ["html"] }],
+    const target = await writeReport({
+      html,
+      format: "html",
+      suggestedName: reportBasename(),
     });
-    if (!target) return;
+    if (!target) {
+      setStatusText("Export cancelled");
+      return;
+    }
 
-    await writeTextFile(target, injected);
     log("success", `Report exported to ${target}`);
-    notify("success", "Report exported", "Open it in any browser; it needs no network access.");
+    notify(
+      "success",
+      "Report exported",
+      "A self-contained HTML file. It needs no network access and prints to PDF from the browser."
+    );
+    await revealReport(target).catch(() => {
+      // Not being able to launch the default handler is not an export failure.
+    });
   } catch (err) {
     log("system", `Export failed: ${String(err)}`);
     notify("error", "Export failed", String(err));
   }
 }
 
-function severityRank(severity: string): number {
-  return severity === "Critical" ? 0 : severity === "High" ? 1 : 2;
+/**
+ * Prints the report through the host print pipeline.
+ *
+ * This is the PDF path. WebView2 is Chromium, so the print dialog offers
+ * "Microsoft Print to PDF" and "Save as PDF" natively, and the document
+ * arrives already typeset for A4 with a running footer and page numbers. That
+ * produces real vector text — selectable and searchable — which is the one
+ * thing a canvas-based rasteriser cannot.
+ */
+async function exportPdf(): Promise<void> {
+  if (!reportReady()) return;
+
+  try {
+    setBusy("Preparing PDF");
+    setStatusText("Choose “Save as PDF” in the print dialog", { muted: false });
+    const html = buildReportHtml();
+    await printToPdf(html);
+    log("success", "PDF written from the print dialog.");
+    notify(
+      "success",
+      "PDF exported",
+      "Select “Microsoft Print to PDF” or “Save as PDF” as the printer."
+    );
+  } catch (err) {
+    log("system", `PDF export failed: ${String(err)}`);
+    notify("error", "PDF export failed", String(err));
+  }
+}
+
+/**
+ * Writes the report to a temporary file and hands it to the default browser.
+ *
+ * Worth having as its own action: the browser's print dialog exposes margin
+ * and header controls that the webview's does not, and it is the route a
+ * reader takes when they want to be in charge of the page setup.
+ */
+async function openReportInBrowser(): Promise<void> {
+  if (!reportReady()) return;
+
+  try {
+    setBusy("Building report");
+    const html = buildReportHtml();
+    const target = await writeReport({
+      html,
+      format: "html",
+      suggestedName: reportBasename(),
+      target: await scratchPath(`${reportBasename()}.html`),
+    });
+    if (!target) return;
+    log("success", `Report written to ${target}`);
+    await revealReport(target);
+  } catch (err) {
+    log("system", `Could not open the report: ${String(err)}`);
+    notify("error", "Could not open the report", String(err));
+  }
+}
+
+function reportReady(): boolean {
+  if (state.findings.length > 0) return true;
+  notify("info", "Nothing to export", "Run an analysis first.");
+  return false;
+}
+
+/** A path in the OS temp directory, for a report the user is not choosing. */
+async function scratchPath(name: string): Promise<string> {
+  return join(await tempDir(), name);
 }
 
 // ---------------------------------------------------------------------------
@@ -1123,9 +1264,28 @@ function registerCommands(): void {
       group: "Project",
       icon: "download",
       hint: "Ctrl+E",
-      keywords: "share pdf document",
+      keywords: "share document archive",
       disabled: () => state.findings.length === 0,
       run: () => void exportReport(),
+    },
+    {
+      id: "export-pdf",
+      label: "Export PDF report",
+      group: "Project",
+      icon: "document",
+      hint: "Ctrl+Shift+E",
+      keywords: "print pdf document share",
+      disabled: () => state.findings.length === 0,
+      run: () => void exportPdf(),
+    },
+    {
+      id: "export-open",
+      label: "Open report in browser",
+      group: "Project",
+      icon: "launch",
+      keywords: "browser preview print share",
+      disabled: () => state.findings.length === 0,
+      run: () => void openReportInBrowser(),
     },
     {
       id: "history",
@@ -1153,8 +1313,13 @@ function registerCommands(): void {
       hint: "Ctrl+Shift+L",
       keywords: "dark light appearance gray",
       run: () => {
-        applyTheme(nextTheme());
-        notify("info", "Theme changed", THEME_LABELS[nextTheme()]);
+        // The next theme has to be resolved once. `applyTheme` persists the
+        // choice, so calling `nextTheme()` a second time for the label reads
+        // the theme that was *just* applied and reports the one after it —
+        // the toast named a theme the user was not looking at.
+        const next = nextTheme();
+        applyTheme(next);
+        notify("info", "Theme changed", THEME_LABELS[next]);
       },
     },
     {
@@ -1269,6 +1434,20 @@ function installKeys(): void {
       label: "Ctrl+E",
       run: () => void exportReport(),
     },
+    {
+      key: "e",
+      ctrlOrMeta: true,
+      shift: true,
+      label: "Ctrl+Shift+E",
+      run: () => void exportPdf(),
+    },
+    {
+      key: "p",
+      ctrlOrMeta: true,
+      shift: true,
+      label: "Ctrl+Shift+P",
+      run: () => void openReportInBrowser(),
+    },
     { key: "h", ctrlOrMeta: true, label: "Ctrl+H", run: () => openHistory(history) },
     { key: ",", ctrlOrMeta: true, label: "Ctrl+,", run: openSettings },
     { key: "l", ctrlOrMeta: true, label: "Ctrl+L", run: () => switchSurface("log") },
@@ -1304,7 +1483,7 @@ function installKeys(): void {
       label: "?",
       run: () => {
         switchSurface("log");
-        log("system", "Shortcuts: Ctrl+K commands · Ctrl+O open · F5 analyze · Ctrl+E export · Alt+↑/↓ step findings");
+        log("system", "Shortcuts: Ctrl+K commands · Ctrl+O open · F5 analyze · Ctrl+E export HTML · Ctrl+Shift+E export PDF · Alt+↑/↓ step findings");
       },
     },
     {

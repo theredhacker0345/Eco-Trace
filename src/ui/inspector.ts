@@ -17,31 +17,44 @@ import { initTablist } from "./focus.js";
 import { fixFor, hasTemplate } from "./remediation.js";
 import { selectedFinding, state, subscribe } from "./store.js";
 
-/** Resolves Bob-authored fixes, populated by the analyzer stage. */
+/** Resolves Bob-authored fixes, keyed by finding identity (rule|file|line). */
 const bobFixes = new Map<string, string>();
 
-/** Resolves Bob-authored chain hops, keyed by rule id. */
+/**
+ * Resolves Bob-authored chain hops.
+ *
+ * Keyed by finding identity, not by rule id. A chain is a statement about one
+ * path through one file, so keying it on the rule meant that the first
+ * occurrence of `W01` in the project lent its chain — root cause, file and
+ * line — to every other `W01` in the repository, shown in the inspector as
+ * though it had been traced.
+ */
 const bobChains = new Map<string, string[]>();
 
 /** Local call-graph chains, keyed by finding identity. */
 const localChains = new Map<string, ChainNode[]>();
 
-export function registerBobFix(patternId: string, fix: string): void {
-  bobFixes.set(patternId, fix);
+/** Rule + absolute path + line: the identity every per-finding map is keyed on. */
+function identity(finding: Finding): string {
+  return `${finding.patternId}|${finding.file}|${finding.line}`;
 }
 
-export function registerBobChain(patternId: string, chain: string[]): void {
-  bobChains.set(patternId, chain);
+export function registerBobFix(finding: Finding, fix: string): void {
+  bobFixes.set(identity(finding), fix);
+}
+
+export function registerBobChain(finding: Finding, chain: string[]): void {
+  bobChains.set(identity(finding), chain);
 }
 
 export function registerLocalChain(finding: Finding, chain: ChainNode[]): void {
-  localChains.set(`${finding.patternId}|${finding.file}|${finding.line}`, chain);
+  localChains.set(identity(finding), chain);
 }
 
 function currentFix(finding: Finding): { text: string; origin: string } {
-  const bob = bobFixes.get(finding.patternId);
+  const bob = bobFixes.get(identity(finding));
   if (bob && bob.trim()) {
-    return { text: bob, origin: "IBM Bob 2.0 · generated for this call chain" };
+    return { text: bob, origin: "IBM Bob 2.0 · written against this call chain" };
   }
   return {
     text: fixFor(finding),
@@ -58,7 +71,7 @@ const ROLE_LABEL: Record<ChainNode["role"] | string, string> = {
 };
 
 function chainMarkup(finding: Finding): string {
-  const bob = bobChains.get(finding.patternId);
+  const bob = bobChains.get(identity(finding));
   if (bob && bob.length) {
     return bob
       .map((hop, index) => {
@@ -76,8 +89,7 @@ function chainMarkup(finding: Finding): string {
       .join("");
   }
 
-  const chain =
-    localChains.get(`${finding.patternId}|${finding.file}|${finding.line}`) ?? [];
+  const chain = localChains.get(identity(finding)) ?? [];
 
   return chain
     .map((node, index) => {

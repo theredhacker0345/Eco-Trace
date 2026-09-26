@@ -54,11 +54,35 @@ export interface DumpsysResult {
   network: NetworkEntry[];
   dozeViolations: DozeViolation[];
   cpuWakeups: CpuWakeup[];
+  /**
+   * mAh attributed to the packages EcoTrace was pointed at, from the
+   * `Uid <n> (<package>): <x> mAh` rows of the Estimated power use section.
+   *
+   * This is the value a drain rate should be derived from. It has 0.1 mAh
+   * resolution and is already an *increment over the counting window*, so it
+   * needs no battery-capacity assumption and no differencing — whereas the
+   * charge-level percentage only has 1% granularity, which on a 3000 mAh cell
+   * is a 30 mAh step: a two-minute session could only ever report 0 or
+   * 15 mAh/min. Present when at least one watched uid was resolved to a
+   * package; absent means the caller is profiling an unknown target, in which
+   * case the charge-level fallback in computeDelta is the best available.
+   */
+  appDrainMah: number | null;
+  /** Package names the rows in `appDrainMah` were attributed to. */
+  appPackages: string[];
 }
 
 export interface DumpsysDelta {
   drainRateMahPerMin: number;
   elapsedMinutes: number;
+  /**
+   * How the drain rate was obtained. The UI and the exported report both show
+   * this, because a number whose provenance is unknown is a number nobody
+   * should act on.
+   */
+  source: 'app-estimator' | 'charge-level' | 'unavailable';
+  /** Resolution of the measurement, in mAh. 30 means the figure is coarse. */
+  resolutionMah: number;
   before: DumpsysResult;
   after: DumpsysResult;
   topDrainers: PerUidEntry[];
@@ -183,6 +207,51 @@ export function parseEstimatedPowerUse(
   }
 
   return { components, totalDrainMah };
+}
+
+// ---------------------------------------------------------------------------
+// parseAppDrain
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts the per-uid mAh rows for a set of watched packages.
+ *
+ * Real `dumpsys batterystats --charged` output puts them in the Estimated
+ * power use section as:
+ *
+ *   Uid u0a213 (com.example.app): 412.6 mAh
+ *
+ * The uid is a letter-prefixed `u0aNNN` on user builds and a bare integer on
+ * some, and the package name is optional, so both forms are accepted and the
+ * uid is also resolved through the `Uid <n>:` rows in the Discharge section.
+ */
+export function parseAppDrain(
+  section: string,
+  watched: ReadonlySet<string>,
+  uidToPackage: ReadonlyMap<string, string>
+): { mah: number; packages: string[] } {
+  const rowRe = /^\s*Uid\s+([\w]+)\s*(?:\(([^)]+)\))?\s*:\s*([\d.]+)\s*mAh/i;
+  const total: Record<string, number> = {};
+
+  for (const line of section.split('\n')) {
+    const m = rowRe.exec(line);
+    if (!m) continue;
+
+    const uid = m[1];
+    const inline = m[2] ? m[2].trim() : undefined;
+    const pkg = inline ?? uidToPackage.get(uid);
+    if (!pkg || !watched.has(pkg)) continue;
+
+    total[pkg] = (total[pkg] ?? 0) + safeFloat(m[3]);
+  }
+
+  const packages = Object.keys(total);
+  const mah = packages.reduce((sum, pkg) => sum + total[pkg], 0);
+  return { mah: round2(mah), packages };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,48 +395,81 @@ function mergeNetworkEntries(raws: PerUidNetRaw[]): NetworkEntry[] {
 
 export function parseDozeViolations(section: string): DozeViolation[] {
   const violations: DozeViolation[] = [];
+  const seen = new Set<string>();
+
+  const push = (v: DozeViolation): void => {
+    const key = `${v.type}|${v.packageName}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    violations.push(v);
+  };
 
   try {
     const lines = section.split('\n');
-    let inWhitelist = false;
 
-    for (const line of lines) {
-      // Whitelist section header
-      if (/Doze Whitelist/i.test(line)) {
-        inWhitelist = true;
-        continue;
-      }
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
 
-      if (inWhitelist) {
-        // End of whitelist section: blank line or different header
-        if (line.trim() === '' || /^\s{0,2}\S/.test(line) && !/^\s+\w/.test(line)) {
-          inWhitelist = false;
-        } else {
-          // Package name on its own line, possibly indented
-          const pkg = line.trim();
-          if (pkg && !pkg.startsWith('#')) {
-            violations.push({ packageName: pkg, type: 'whitelist', details: line.trim() });
+      // ── App-level Doze state machine ────────────────────────────────────
+      // batterystats prints the device's own transitions as
+      //   mDeviceIdleState=3 (IDLE) → mDeviceIdleState=2
+      // and per-package transitions as
+      //   App com.example.app deadline exceeded: [10] +5m0s
+      // A transition out of IDLE/MAINTENANCE back to a running state means the
+      // package pulled the device out of idle.
+      const idleLine = /mDeviceIdleState=(\d+)/.exec(line);
+      if (idleLine) {
+        const next = Number(idleLine[1]);
+        // 2 = IDLE, 3 = MAINTENANCE. 1 = LIGHT_IDLE on older builds. Anything
+        // at or below those, arriving from a deeper state, is an idle exit.
+        if (next <= 2) {
+          const prev = previousIdleState(lines, i);
+          if (prev !== null && prev > next) {
+            const pkg = packageFor(lines, i);
+            push({
+              packageName: pkg,
+              type: 'idle-exit',
+              details: `Doze idle state ${prev} → ${next} (line ${i + 1})`,
+            });
           }
-          continue;
-        }
-      }
-
-      // idle-exit: mDeviceIdleState changes to ACTIVE from non-IDLE
-      const idleExitMatch = line.match(/mDeviceIdleState.*?ACTIVE.*?from\s+(\S+)/i);
-      if (idleExitMatch) {
-        const prev = idleExitMatch[1].toUpperCase();
-        if (prev !== 'IDLE') {
-          violations.push({ packageName: 'system', type: 'idle-exit', details: line.trim() });
         }
         continue;
       }
 
-      // wakeup-alarm: setAlarmLocked with FLAG_WAKE_FROM_IDLE
+      // ── Wakeup alarms charged against idle ──────────────────────────────
       if (/setAlarmLocked/i.test(line) && /FLAG_WAKE_FROM_IDLE/i.test(line)) {
-        // Try to extract a package name from the line
-        const pkgMatch = line.match(/([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,})/i);
-        const pkg = pkgMatch ? pkgMatch[1] : 'unknown';
-        violations.push({ packageName: pkg, type: 'wakeup-alarm', details: line.trim() });
+        const pkg = extractPackage(line) ?? extractPackage(lines[i + 1] ?? '') ?? 'unknown';
+        push({
+          packageName: pkg,
+          type: 'wakeup-alarm',
+          details: line.trim().slice(0, 300),
+        });
+        continue;
+      }
+
+      // ── Whitelist entries ───────────────────────────────────────────────
+      // The real header is `Whitelisted app stats:`. The previous parser
+      // looked for `Doze Whitelist`, a string that does not appear in
+      // batterystats output at all, so the whitelist branch was unreachable
+      // and the section silently contributed nothing.
+      if (/^\s*Whitelisted app stats\s*:?\s*$/i.test(line)) {
+        for (let j = i + 1; j < lines.length; j++) {
+          const entry = lines[j];
+          if (entry.trim() === '') break;
+          if (/^\s*[\d.]+:\s*[\d.]+mAh/.test(entry)) {
+            const pkg = /^\s*([\w.]+)\s*:/.exec(entry)?.[1];
+            if (pkg) {
+              push({
+                packageName: pkg,
+                type: 'whitelist',
+                details: entry.trim().slice(0, 200),
+              });
+            }
+            continue;
+          }
+          if (/^\s*Uid\s/i.test(entry) || /^\s*\S/.test(entry)) break;
+        }
+        continue;
       }
     }
   } catch {
@@ -375,6 +477,33 @@ export function parseDozeViolations(section: string): DozeViolation[] {
   }
 
   return violations;
+}
+
+/** Walks backwards to the last idle state seen, so a transition has two ends. */
+function previousIdleState(lines: string[], before: number): number | null {
+  for (let i = before - 1; i >= 0 && i >= before - 40; i--) {
+    const m = /mDeviceIdleState=(\d+)/.exec(lines[i]);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
+/** The nearest package name to a line, used to attribute a device transition. */
+function packageFor(lines: string[], from: number): string {
+  for (let i = from; i < lines.length && i < from + 6; i++) {
+    const pkg = extractPackage(lines[i]);
+    if (pkg) return pkg;
+  }
+  for (let i = from - 1; i >= 0 && i >= from - 6; i--) {
+    const pkg = extractPackage(lines[i]);
+    if (pkg) return pkg;
+  }
+  return 'system';
+}
+
+function extractPackage(line: string): string | undefined {
+  const m = /\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+)\b/i.exec(line);
+  return m ? m[1] : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -465,7 +594,8 @@ function parseDuration(s: string): number {
 // parseDumpsys — main public API
 // ---------------------------------------------------------------------------
 
-export function parseDumpsys(raw: string): DumpsysResult {
+export function parseDumpsys(raw: string, watchedPackages?: readonly string[]): DumpsysResult {
+  const watched = new Set(watchedPackages ?? []);
   const defaults: DumpsysResult = {
     timestamp: Date.now(),
     chargeLevel: -1,
@@ -478,6 +608,8 @@ export function parseDumpsys(raw: string): DumpsysResult {
     network: [],
     dozeViolations: [],
     cpuWakeups: [],
+    appDrainMah: null,
+    appPackages: [],
   };
 
   if (!raw || raw.trim() === '') return defaults;
@@ -499,6 +631,27 @@ export function parseDumpsys(raw: string): DumpsysResult {
     try {
       perUid = parsePerUidData(sections.estimatedPower + '\n' + sections.discharge);
     } catch { /* defensive */ }
+
+    // uid → package, so the Estimated-power-use rows can be attributed even
+    // when batterystats omits the parenthetical package name.
+    const uidToPackage = new Map<string, string>();
+    for (const entry of perUid) {
+      if (entry.packageName && entry.packageName !== entry.uid) {
+        uidToPackage.set(entry.uid, entry.packageName);
+      }
+    }
+
+    let appDrainMah: number | null = null;
+    let appPackages: string[] = [];
+    if (watched.size > 0) {
+      try {
+        const app = parseAppDrain(sections.estimatedPower, watched, uidToPackage);
+        if (app.packages.length > 0) {
+          appDrainMah = app.mah;
+          appPackages = app.packages;
+        }
+      } catch { /* defensive */ }
+    }
 
     // Wakelocks
     let wakelocks: WakelockEntry[] = [];
@@ -557,6 +710,8 @@ export function parseDumpsys(raw: string): DumpsysResult {
       network,
       dozeViolations,
       cpuWakeups,
+      appDrainMah,
+      appPackages,
     };
   } catch {
     return defaults;
@@ -567,6 +722,22 @@ export function parseDumpsys(raw: string): DumpsysResult {
 // computeDelta
 // ---------------------------------------------------------------------------
 
+/**
+ * Computes the drain rate between two snapshots.
+ *
+ * Two estimators, in order of preference:
+ *
+ *  1. `appDrainMah` — batterystats' own per-uid mAh accounting for the
+ *     packages under test. Resolution 0.1 mAh, already a window delta, and
+ *     scoped to the app rather than to the whole device. This is the number a
+ *     developer can act on.
+ *  2. Charge level — `(before% - after%) / 100 * capacity`. The capacity is a
+ *     nominal guess (a 3000 mAh cell is typical but not universal) and the
+ *     resolution is one percentage point, i.e. 30 mAh. On a short session that
+ *     is the difference between "0.00 mAh/min" and "15.00 mAh/min" for a
+ *     battery that did not measurably move. It is reported with its
+ *     resolution attached so the UI can say so out loud.
+ */
 export function computeDelta(
   before: DumpsysResult,
   after: DumpsysResult,
@@ -575,16 +746,44 @@ export function computeDelta(
   const elapsedMinutes = (after.timestamp - before.timestamp) / 60000;
 
   let drainRateMahPerMin = 0;
-  // Only compute drain rate when both charge levels are valid (0–100) and
-  // enough time has elapsed. A chargeLevel of -1 means "not parsed" and
-  // would produce a wildly wrong drain figure.
-  const levelsValid =
-    before.chargeLevel >= 0 && before.chargeLevel <= 100 &&
-    after.chargeLevel  >= 0 && after.chargeLevel  <= 100;
-  if (elapsedMinutes > 0 && levelsValid) {
-    drainRateMahPerMin =
-      Math.max(0, ((before.chargeLevel - after.chargeLevel) / 100) * batteryCapacityMah / elapsedMinutes);
+  let source: DumpsysDelta['source'] = 'unavailable';
+  let resolutionMah = 0;
+
+  if (elapsedMinutes > 0) {
+    // 1. Prefer the per-package estimator.
+    if (
+      after.appDrainMah !== null &&
+      before.appDrainMah !== null &&
+      Number.isFinite(after.appDrainMah) &&
+      Number.isFinite(before.appDrainMah)
+    ) {
+      const deltaMah = after.appDrainMah - before.appDrainMah;
+      if (deltaMah > 0) {
+        drainRateMahPerMin = deltaMah / elapsedMinutes;
+        source = 'app-estimator';
+        resolutionMah = 0.1;
+      }
+    }
+
+    // 2. Fall back to the charge-level difference.
+    if (source === 'unavailable') {
+      const levelsValid =
+        before.chargeLevel >= 0 && before.chargeLevel <= 100 &&
+        after.chargeLevel >= 0 && after.chargeLevel <= 100;
+      if (levelsValid) {
+        const dropMah = ((before.chargeLevel - after.chargeLevel) / 100) * batteryCapacityMah;
+        // A level that went *up* means the device charged during the window;
+        // reporting 0 there would imply a measurement rather than a rewind.
+        if (dropMah > 0) {
+          drainRateMahPerMin = dropMah / elapsedMinutes;
+          source = 'charge-level';
+          resolutionMah = round2(batteryCapacityMah / 100);
+        }
+      }
+    }
   }
+
+  drainRateMahPerMin = Math.max(0, round2(drainRateMahPerMin));
 
   // topDrainers: sort after.perUid by cpuTimeMs desc, take top 5
   const topDrainers = [...after.perUid]
@@ -598,6 +797,8 @@ export function computeDelta(
   return {
     drainRateMahPerMin,
     elapsedMinutes,
+    source,
+    resolutionMah,
     before,
     after,
     topDrainers,

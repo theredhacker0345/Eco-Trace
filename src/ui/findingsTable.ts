@@ -30,7 +30,7 @@ import {
   type SortKey,
 } from "./store.js";
 
-type Scope = "all" | "flagged" | "selected";
+type Scope = "all" | "serious" | "selected";
 
 let sortKey: SortKey = "severity";
 let sortAsc = true;
@@ -53,12 +53,15 @@ function keyOf(finding: Finding): string {
  */
 function visibleFindings(): Finding[] {
   const q = query.trim().toLowerCase();
-  const flagged = new Set(state.findings.map((f) => f.file));
 
   return state.findings.filter((finding) => {
     if (!activeSeverities.has(finding.severity.toLowerCase())) return false;
     if (scope === "selected" && finding.file !== state.selectedFile) return false;
-    if (scope === "flagged" && !flagged.has(finding.file)) return false;
+    // "Serious" is the triage view: only the severities that are worth a
+    // same-day fix. An earlier build called this "flagged files only" and
+    // filtered on "has any finding at all", which every row in the table
+    // satisfies — the option was therefore a no-op that looked like a filter.
+    if (scope === "serious" && finding.severity === "Medium") return false;
     if (!q) return true;
     return (
       finding.patternName.toLowerCase().includes(q) ||
@@ -68,6 +71,20 @@ function visibleFindings(): Finding[] {
       relPath(finding.file, state.projectPath).toLowerCase().includes(q)
     );
   });
+}
+
+/**
+ * Sets the scope mode from outside the table and keeps the toolbar select in
+ * step. The navigator needs this: a file click is a scoping gesture, and
+ * without a single owner the view's local `scope` and the store's
+ * `selectedFile` drift apart — which is exactly how "picking a file scopes the
+ * table" silently stopped working.
+ */
+export function setScope(next: Scope): void {
+  scope = next;
+  const select = document.getElementById("input-scope");
+  if (select instanceof HTMLSelectElement) select.value = next;
+  render();
 }
 
 /** Re-sorts the canonical list and republishes the sort indicator. */
@@ -420,7 +437,6 @@ export function resetFilters(): void {
   qs<HTMLSelectElement>("input-scope").value = "all";
   emit("findings");
 }
-
 /**
  * Concatenates the fix for every currently visible finding, with a header per
  * finding so the pasted block is still reviewable in a pull request.
