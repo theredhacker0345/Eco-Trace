@@ -145,6 +145,22 @@ tr.lose td { color: var(--ink-3); }
 .t-ok { color: var(--green); background: rgba(25,128,56,0.09); }
 
 .pill { display: inline-block; padding: 2px 8px; border: 1px solid var(--ink-3); font-size: 10px; font-family: var(--mono); }
+
+/* The live demo URL, set large enough to be read off a slide and typed by
+   hand. It is printed rather than hyperlinked on purpose: a PDF read on a
+   phone or printed to paper has no working link, and this deck is submitted as
+   a file. */
+.demo-url {
+  margin-top: 16px;
+  padding: 11px 15px;
+  border: 1px solid #393939;
+  background: #262626;
+  color: #78a9ff;
+  font-family: var(--mono);
+  font-size: 17px;
+  letter-spacing: 0.2px;
+  align-self: flex-start;
+}
 ul.tick { list-style: none; }
 ul.tick li { position: relative; padding-left: 17px; margin-bottom: 7px; font-size: 13px; line-height: 19px; color: var(--ink-2); }
 ul.tick li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
@@ -264,9 +280,14 @@ ul.cross li { position: relative; padding-left: 17px; margin-bottom: 7px; font-s
       <div class="card" style="background:#262626;border-color:#393939"><div class="card--num" style="color:#fff">4</div><div class="card--lbl" style="color:#a8a8a8">hops in the deepest chain</div></div>
       <div class="card" style="background:#262626;border-color:#393939"><div class="card--num" style="color:#fff">17</div><div class="card--lbl" style="color:#a8a8a8">sources, 11 of them clean</div></div>
     </div>
-    <p style="margin-top:22px">The eleven clean files matter as much as the six flagged ones. They are what the coverage matrix renders as an explicit zero — <strong>"checked and clean" is a result</strong>, and a tool that only knows how to find things cannot show you it looked.</p>
+    <p style="margin-top:20px">The eleven clean files matter as much as the six flagged ones. They are what the coverage matrix renders as an explicit zero — <strong>"checked and clean" is a result</strong>, and a tool that only knows how to find things cannot show you it looked.</p>
+
+    <!-- The URL is printed on the slide rather than promised in prose. This
+         document gets read offline, by someone who will not have the
+         submission form open next to it. -->
+    <div class="demo-url">theredhacker0345.github.io/Eco-Trace</div>
   </div>
-  <div class="s-foot">Live demo &middot; link in the submission</div>
+  <div class="s-foot">Live demo &middot; theredhacker0345.github.io/Eco-Trace</div>
 </section>
 
 <!-- 7 · Report -->
@@ -374,10 +395,11 @@ ul.cross li { position: relative; padding-left: 17px; margin-bottom: 7px; font-s
     <p class="title-sub">The expensive part of a battery bug is not finding it. It is finding it again in six weeks, because nobody changed the decision that caused it.</p>
     <div class="g3" style="margin-top:26px;max-width:640px">
       <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Live demo</h3><p style="font-size:12px;color:#e0e0e0">Opens populated. No install, no key.</p></div>
-      <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Repository</h3><p style="font-size:12px;color:#e0e0e0">Public, with the Bob session record.</p></div>
-      <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Windows build</h3><p style="font-size:12px;color:#e0e0e0">Signed installer in Releases.</p></div>
+      <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Repository</h3><p style="font-size:12px;color:#e0e0e0">github.com/theredhacker0345/Eco-Trace</p></div>
+      <div class="card" style="background:#262626;border-color:#393939"><h3 style="color:#a8a8a8">Windows build</h3><p style="font-size:12px;color:#e0e0e0">Releases &middot; signed installer</p></div>
     </div>
-    </div>
+
+    <div class="demo-url">theredhacker0345.github.io/Eco-Trace</div>
   </div>
   <div class="s-foot">Code and Chaos &middot; IBM Bob 2.0 Hackathon &middot; September 2026</div>
 </section>
