@@ -11,10 +11,12 @@
     "report:fonts": "node tools/embed-report-fonts.mjs",
     "deck": "node docs/deck/render.mjs",
     "icons": "node tools/render-icons.mjs && tauri icon src-tauri/icons/icon-source.png",
+    "workflow:lint": "node tools/lint-workflows.mjs",
     "tauri": "tauri"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.5",
+    "js-yaml": "^5.4.2",
     "playwright": "^1.63.0",
     "sass": "^1.105.0",
     "typescript": "^5.4.5",

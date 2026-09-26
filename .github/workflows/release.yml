@@ -47,10 +47,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'EcoTrace ${{ github.ref_name }}'
+          # Resolved once, and used everywhere.
+          #
+          # On a tag push, `github.ref_name` is the tag. On a manual dispatch it
+          # is the *branch* -- so reading `github.ref_name` unconditionally
+          # published a release tagged `main`, whatever tag was typed into the
+          # input. The input is now honoured on the path that supplies it.
+          # Plain scalars, not YAML-quoted. A single-quoted YAML scalar ends at
+          # the first inner quote, and the expression below contains
+          # 'workflow_dispatch' -- so quoting it made this file invalid YAML and
+          # the entire release path silently dead. GitHub reported the failure
+          # as a workflow syntax error, not as a bad release.
+          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          releaseName: EcoTrace ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseBody: |
-            ## EcoTrace ${{ github.ref_name }}
+            ## EcoTrace ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
             ### How to install
             1. Download `EcoTrace_*_x64-setup.exe` below

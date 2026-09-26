@@ -592,14 +592,42 @@ says so, in a sentence, at the point of use.
 
 ## Installation
 
-### Download (Recommended)
+### Windows — download
 
-Go to the **[Releases page](https://github.com/theredhacker0345/Eco-Trace/releases)** and download `EcoTrace_0.1.0_x64-setup.exe`.
+Go to **[Releases](https://github.com/theredhacker0345/Eco-Trace/releases)** and download `EcoTrace_0.1.0_x64-setup.exe`.
 
-> If Windows SmartScreen appears, click **"More info" -> "Run anyway"**.
-> This is expected for unsigned apps -- the installer is safe.
+> If Windows SmartScreen appears, click **"More info" -> "Run anyway"**. This is
+> expected for unsigned apps — the installer is safe.
+
+The installer is built in CI, not on a maintainer's laptop:
+
+```
+tag v0.1.0  ->  release.yml  ->  tauri-action  ->  NSIS + MSI on a Release
+```
+
+To produce it:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+That is the whole procedure. `release.yml` runs on the tag, builds on
+`windows-latest` with the MSVC toolchain, and attaches the installers to a
+public Release — permanent, no login, and the link a judge can click. A
+workflow *artifact* is not a substitute: those expire and sit behind a login,
+which is why the submission link points at a Release.
+
+**Why CI builds this.** The Rust backend needs the MSVC C++ toolchain to compile
+the WebView2 bindings, which is not something every machine has — including
+the one this was developed on. GitHub's runners have it preinstalled, so the
+build is reproducible for anyone who clones the repository rather than only for
+whoever set their machine up correctly.
 
 ### Build from Source
+
+You need the MSVC build tools for the desktop binary. Prerequisites and
+troubleshooting in [SETUP.md](SETUP.md).
 
 ```bash
 git clone https://github.com/theredhacker0345/Eco-Trace.git
@@ -608,7 +636,8 @@ npm install
 npm run tauri build
 ```
 
-Full prerequisites and troubleshooting in [SETUP.md](SETUP.md).
+The frontend alone needs none of that — `npm run build` produces the hosted
+demo, and `npm run dev` runs the workbench in a browser with the demo corpus.
 
 ---
 

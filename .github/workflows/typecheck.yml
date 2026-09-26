@@ -26,3 +26,11 @@ jobs:
 
       - name: Run TypeScript type check
         run: npx tsc --noEmit
+
+      # A workflow with invalid YAML is not a build failure anyone notices --
+      # GitHub reports it as a syntax error at dispatch time, so the file sits
+      # there looking correct until somebody needs it. That is how a release
+      # workflow stayed broken through several pushes without anyone finding
+      # out. This step is the reason that cannot happen again.
+      - name: Validate GitHub Actions workflows
+        run: npm run workflow:lint

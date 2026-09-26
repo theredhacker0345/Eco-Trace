@@ -58,6 +58,10 @@ jobs:
           prerelease: false
           includeUpdaterJson: false
 
+      # The EXE is also uploaded as a workflow artifact so a build can be
+      # verified without publishing a release. Artifacts are NOT a delivery
+      # channel: they expire, and they sit behind a login. The submission link
+      # points at a Release, which is permanent and public.
       - name: Upload EXE as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -66,4 +70,4 @@ jobs:
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90
