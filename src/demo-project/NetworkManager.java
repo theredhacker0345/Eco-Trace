@@ -22,10 +22,11 @@ import java.io.IOException;
  *                     10-minute timeout. At 96 sync triggers a day that is
  *                     32.6 seconds of unnecessary screen-off CPU daily, and the
  *                     radio never gets to idle.
- *   N02 (High)     -- OkHttpClient with no connectTimeout(). A thread blocks
- *                     indefinitely against an unreachable host, holding the
- *                     wake lock open for the whole default socket timeout.
- *   N03 (High)     -- no readTimeout(), same failure mode on the response leg.
+ *   N02 (High)     -- OkHttpClient with no explicit timeout pinned, so how long
+ *                     a hung socket holds the wake lock is the library's default
+ *                     rather than a decision. (N03 covers the half-configured
+ *                     case — a connect timeout with no read timeout — and does
+ *                     not fire here, because neither is set.)
  */
 public final class NetworkManager {
 

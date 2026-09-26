@@ -17,10 +17,17 @@ import okhttp3.Request
  * (W03, W04, W05, N05, A01, A02, A03) carry Kotlin-specific variants.
  *
  * Planted anti-patterns:
- *   W04 (Critical) -- PARTIAL_WAKE_LOCK inside a coroutine scope that is never
- *                     cancelled, so the lock outlives the work it was for.
- *   N01 (High)     -- network call inside a delay() loop with no exit
+ *   W01 (Critical) -- a partial wake lock acquired in startStreaming() that no
+ *                     path releases, so it outlives the work it was taken for.
+ *   N02 (High)     -- the OkHttpClient is built with no timeout pinned.
+ *   N01 (Critical) -- network call inside a `while (true)` loop with no exit
  *                     condition and no backoff.
+ *
+ * Deliberately *not* planted: W04. That rule is "a PARTIAL_WAKE_LOCK held in a
+ * background Service", and this is a plain class holding a lock — a leak (W01),
+ * not a Service shape. An earlier version of this header claimed W04 anyway,
+ * which is the kind of documentation over-claim `npm run analyzer:check` now
+ * fails on.
  */
 class SensorBridge(private val context: Context) {
 

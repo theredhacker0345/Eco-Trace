@@ -142,6 +142,33 @@ Static analysis works entirely from source files — no Android device required.
 
 ---
 
+### Automated precision check (no UI needed)
+
+```bash
+npm run analyzer:check
+```
+
+Runs the **real analyzer** (imported from `src/analyzer/static.ts`, not a copy)
+over both corpora and a set of hand-written cases, and fails on any of:
+
+- a rule the demo corpus (`src/demo-project/README.md`) or the test fixture
+  (`src/test-fixtures/SampleAndroidApp/README.md`) documents that no longer fires;
+- a rule firing in a file whose README table does not list it — the table is the
+  contract, so documentation cannot silently fall behind a detector;
+- any finding in the seven documented-clean corpus files;
+- any finding at all in a case written to be correct (an OkHttp import, a
+  permission check, an XML namespace, `stopSelf(startId)`, a bound service, a
+  foreground service, `setAlarmClock`, two unrelated timers, `list.execute(item)`,
+  a `removeUpdates()` teardown, a leak inside `src/test`);
+- a suppression directive that does not suppress;
+- a known true positive that stopped firing.
+
+CI runs this on every push and pull request (`.github/workflows/typecheck.yml`).
+Add a case here whenever a false positive is reported — the case is the fix's
+test, and the next person who touches a detector inherits it.
+
+---
+
 ## 4. Testing Settings Panel
 
 1. Click the **⚙ gear icon** in the bottom bar to open Settings

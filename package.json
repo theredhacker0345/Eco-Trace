@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "analyzer:check": "node tools/check-analyzer.mjs",
     "report:fonts": "node tools/embed-report-fonts.mjs",
     "deck": "node docs/deck/render.mjs",
     "icons": "node tools/render-icons.mjs && tauri icon src-tauri/icons/icon-source.png",

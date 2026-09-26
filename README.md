@@ -29,7 +29,7 @@
 <br/>
 
 <p align="center">
-  <img src="docs/screenshots/workbench.png" alt="EcoTrace workbench: 18 findings across 17 sources, with the four-hop causal chain open in the inspector, traced from NetworkManager.fetchUserProfile back to SyncService.onStartCommand" width="100%">
+  <img src="docs/screenshots/workbench.png" alt="EcoTrace workbench: 27 findings across 17 sources, with the four-hop causal chain open in the inspector, traced from NetworkManager.fetchUserProfile back to SyncService.onStartCommand" width="100%">
 </p>
 
 <p align="center"><sub>

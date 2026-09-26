@@ -13,22 +13,27 @@ Only the input is fixed.
 
 ## What is planted
 
-Seventeen sources: ten carrying known defects, seven deliberately clean.
+Seventeen sources: eight carrying known defects, nine deliberately clean.
 
-| File | Planted | Rule |
+The rule column is the **contract**, not a summary: `npm run analyzer:check`
+asserts that every rule listed here fires in the file it names, that no
+undocumented rule fires in it either, and that the seven clean files stay silent.
+An extra rule in a file is a documentation bug, and the check fails on it.
+
+| File | Planted | Rules |
 |---|---|---|
 | `MainActivity.java` | `RTC_WAKEUP` repeating alarm on every cold start | A06 |
 | `SyncScheduler.java` | `JobScheduler` constraints written and never submitted | A03 |
-| `SyncService.java` | `PARTIAL_WAKE_LOCK` in a Service; `START_STICKY`, no `stopSelf()` | W04, A01 |
-| `SyncEngine.java` | self-reposting `postDelayed` loop, no backoff, no exit | N01 |
-| `NetworkManager.java` | `acquire()` with `release()` only on the success path; no connect or read timeout | W01, N02 |
-| `LocationTracker.java` | GPS at 5 s; FINE location; listener never removed | L01, L02, L03 |
-| `UploadService.java` | nested wake locks; polling retry loop | W06, N06 |
-| `SensorBridge.kt` | partial wake lock in a never-cancelled coroutine scope | W04, N01 |
+| `SyncService.java` | `PARTIAL_WAKE_LOCK` in a Service; `START_STICKY`, no `stopSelf()` | W04, W01, A01, A02 |
+| `SyncEngine.java` | self-reposting `postDelayed` loop with the request inside it; client with no timeout | N01, N02, N06 |
+| `NetworkManager.java` | `acquire()` with `release()` only on the success path; client with no connect or read timeout | W01, N02 |
+| `LocationTracker.java` | `PARTIAL_WAKE_LOCK` never released; GPS at 5 s; FINE location; listener never removed | W04, W01, L01, L02, L03 |
+| `UploadService.java` | nested wake locks; polling retry loop with the request inside it | W04, W01, W06, N02, N01, N06, A01, A02 |
+| `SensorBridge.kt` | partial wake lock held by a never-cancelled coroutine scope; unbounded retry loop | W01, N02, N01 |
 
 `UploadQueue`, `AppConfig`, `UserProfile`, `SessionStore`, `BatteryAware`,
-`Diagnostics`, `LocationSharingPreferences` and `Analytics` contain no
-anti-patterns. They are here because roughly half of any real codebase is
+`Diagnostics`, `LocationSharingPreferences`, `Analytics` and `UserRepository`
+contain no anti-patterns. They are here because roughly half of any real codebase is
 ordinary code, and a corpus where every file is broken demonstrates nothing
 about precision. They are what the report's coverage matrix renders as an
 explicit zero — "checked and clean" is a result.
@@ -54,7 +59,7 @@ three files and four hops upstream.
 ## Using it as a regression test
 
 `analyzeProject()` over this directory should produce a finding for every row in
-the table above, and nothing at all for the eight clean files. If a detector
+the table above, and nothing at all for the nine clean files. If a detector
 changes behaviour, this corpus is where it shows up:
 
 ```bash

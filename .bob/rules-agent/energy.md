@@ -18,6 +18,38 @@ This file is Bob's authoritative reference for detecting Android energy anti-pat
 
 ---
 
+## Suppression and precision
+
+Regex signals are conservative by construction: a detector fires on a *use* of an
+API, never on a mention of it. Concretely, the current build ignores:
+
+- **imports** — `import okhttp3.OkHttpClient;` is not a configured client;
+- **permission checks and constants** — `checkSelfPermission(ACCESS_FINE_LOCATION)`
+  is not a location request;
+- **XML namespaces and localhost URLs** — `http://schemas.android.com/...` is not
+  cleartext traffic;
+- **mentions of a lock without a lock** — `.acquire()` only counts where the file
+  also shows `PowerManager` / `newWakeLock`;
+- **anything under `src/test`, `src/androidTest`, `*Test.java`, `generated/`** —
+  test doubles are matches, not defects.
+
+Where the code is correct and the local tier cannot see why, the developer
+supplies the context in the source:
+
+```java
+wakeLock.acquire();               // ecotrace-ignore W01
+// ecotrace-disable-next-line N02
+OkHttpClient c = new OkHttpClient();
+// ecotrace-ignore-file L02
+@Suppress("EcoTrace:W01")
+```
+
+Directives are collected from the file as written — before comment stripping —
+and applied after every detector has run. This whole contract is enforced by
+`npm run analyzer:check`, which is what keeps this document honest.
+
+---
+
 ## Causal Chain Tracing Protocol
 
 For every **Critical** finding, Bob traces the call graph backwards from the finding's file and method to find the **architectural root cause** — the decision point where a developer made a choice that propagated downstream to cause the drain.

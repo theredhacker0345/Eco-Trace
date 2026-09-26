@@ -112,31 +112,31 @@ Each `ChainNode` has `{ file, method, line, role: "root"|"intermediate"|"symptom
 
 | ID | Name | Severity | What to look for |
 |---|---|---|---|
-| W01 | Unclosed WakeLock | Critical | `.acquire()` with no `.release()`, or release not in a `finally` block |
-| W02 | WakeLock Across IPC Boundary | Critical | `.acquire()` immediately before `startService()`/`sendBroadcast()` |
+| W01 | Unclosed WakeLock | Critical | `.acquire()` on a WakeLock with no `.release()`, or release not on a guaranteed path (`finally`, lifecycle pair, scoped API) |
+| W02 | WakeLock Across IPC Boundary | Critical | WakeLock `.acquire()` immediately before `startService()`/`sendBroadcast()` |
 | W03 | WakeLock in AsyncTask | Critical | `.acquire()` inside a class extending `AsyncTask` |
-| W04 | PARTIAL_WAKE_LOCK in Background Service | Critical | `PARTIAL_WAKE_LOCK` constant inside a class extending `Service` |
+| W04 | PARTIAL_WAKE_LOCK in Background Service | Critical | `newWakeLock(PARTIAL_WAKE_LOCK)` **acquired** in a non-foreground `Service` |
 | W05 | WakeLock in BroadcastReceiver Without goAsync | Critical | `.acquire()` in a `BroadcastReceiver` subclass without `goAsync()` |
-| W06 | Nested WakeLock Acquisition | High | `.acquire()` appears 2+ times in the same file |
+| W06 | Nested WakeLock Acquisition | High | The same lock, or one unit of work, `.acquire()`d twice in the same method or via the same receiver |
 
 ### Network (N)
 
 | ID | Name | Severity | What to look for |
 |---|---|---|---|
 | N01 | Network Call in PostDelayed Loop / Inside Loop | Critical | `postDelayed()` self-re-post + network call, or network inside `for`/`while` |
-| N02 | No Connection Timeout | High | `OkHttpClient`/`HttpURLConnection` without `connectTimeout()` |
+| N02 | No Connection Timeout | High | An HTTP client **constructed** in the file with no `connectTimeout()` (an import or an injected client does not count) |
 | N03 | No Read Timeout | High | Connect timeout set but no `readTimeout()` |
-| N04 | HTTP Instead of HTTPS | High | `"http://"` URL literal (non-localhost) |
-| N05 | Synchronous Network on Main Thread | Critical | `.execute()` or `getInputStream()` in an Activity/Fragment/View |
-| N06 | Polling Without FCM/WebSocket | High | Repeating scheduler + network call, no FCM/WebSocket anywhere in project |
+| N04 | HTTP Instead of HTTPS | High | `"http://"` URL literal with a real endpoint host — namespaces (`schemas.android.com`, `w3.org`) and localhost excluded |
+| N05 | Synchronous Network on Main Thread | Critical | `.newCall(...).execute()` or `getInputStream()` in an Activity/Fragment/View with no `doInBackground()` |
+| N06 | Polling Without FCM/WebSocket | High | A repeating scheduler **plus** a real network call in the file, no push channel anywhere in project |
 
 ### Location / Sensors (L)
 
 | ID | Name | Severity | What to look for |
 |---|---|---|---|
-| L01 | GPS Update Interval < 30 Seconds | Critical | `requestLocationUpdates` with numeric interval < 30000 ms |
-| L02 | FINE Location When COARSE Sufficient | High | `ACCESS_FINE_LOCATION` / `GPS_PROVIDER` / `PRIORITY_HIGH_ACCURACY` |
-| L03 | Sensor Not Unregistered in onPause/onStop | Critical | `registerListener()` with no `unregisterListener()` in the same file |
+| L01 | GPS Update Interval < 30 Seconds | Critical | `requestLocationUpdates(...)` whose time argument — literal or named constant — resolves under 30 000 ms |
+| L02 | FINE Location When COARSE Sufficient | High | A location **request** using `ACCESS_FINE_LOCATION` / `GPS_PROVIDER` / `PRIORITY_HIGH_ACCURACY`; a permission check alone does not count |
+| L03 | Listener Not Unregistered in onPause/onStop | Critical | `registerListener()` / `requestLocationUpdates()` with no `unregisterListener()` / `removeUpdates()` anywhere in the file |
 | L04 | Full-Rate Accelerometer for Step Counting | High | `TYPE_ACCELEROMETER` + step-counting keyword in the same file |
 | L05 | Geofencing via Polling | High | Location polling + distance math, no `GeofencingClient` in project |
 
@@ -144,12 +144,54 @@ Each `ChainNode` has `{ file, method, line, role: "root"|"intermediate"|"symptom
 
 | ID | Name | Severity | What to look for |
 |---|---|---|---|
-| A01 | Service With No stopSelf() | High | `Service` subclass with `onStartCommand()` but no `stopSelf()`/`stopService()` |
+| A01 | Service With No stopSelf() | High | `Service` subclass with `onStartCommand()` and no `stopSelf(...)`/`stopService(...)`; bound services and `IntentService` excluded |
 | A02 | Deferrable Work Using Raw Service | High | `Service`/`IntentService` doing sync/upload/backup, no WorkManager in project |
-| A03 | JobScheduler Ignored for Background Sync | Medium | Network call in a Service, no `JobScheduler`/`WorkManager` constraints |
+| A03 | JobScheduler Ignored for Background Sync | Medium | `new JobInfo.Builder(...)` never submitted via `schedule()`, **or** a network `Service` with no `JobScheduler`/`WorkManager` constraints |
 | A04 | Infinite Animator Not Cancelled in Lifecycle | High | `INFINITE` `ValueAnimator`, no `cancel()` in `onPause`/`onStop` |
 | A05 | Heavy Work in onDraw() | Critical | `new Paint()` or `BitmapFactory` inside `onDraw()` method body |
-| A06 | AlarmManager WAKEUP for Non-Critical Work | High | `ELAPSED_REALTIME_WAKEUP`, `RTC_WAKEUP`, or `setExactAndAllowWhileIdle()` |
+| A06 | AlarmManager WAKEUP for Non-Critical Work | High | `ELAPSED_REALTIME_WAKEUP`, `RTC_WAKEUP`, or `setExactAndAllowWhileIdle()`; `setAlarmClock()` is excluded |
+
+---
+
+## Suppressing a finding
+
+Some findings are correct about the code and still wrong about the verdict: the
+WakeLock is released by a lifecycle observer in another file, the sync really is
+user-initiated, the client is configured in a DI module the detector cannot see.
+The local regex tier has none of that context, so the developer who does is given
+the last word — in the source, next to the code:
+
+```java
+wakeLock.acquire();               // ecotrace-ignore W01
+```
+
+```java
+// ecotrace-disable-next-line N02
+OkHttpClient c = new OkHttpClient();
+```
+
+```java
+// ecotrace-ignore-file L02      — FINE is required by the map-matching feature
+```
+
+```kotlin
+@Suppress("EcoTrace:W01")        // whole file
+```
+
+Directives are read from the source as written (comments are stripped before
+detectors run, so this is a separate pass), an `ecotrace-ignore` on the line
+*above* a finding counts, and a bare `// ecotrace-ignore` suppresses every rule
+on that line. Suppression applies after every detector has run.
+
+Also excluded from every scan, with no directive needed: `src/test`,
+`src/androidTest`, `*Test.java`/`*Tests.java`/`*Spec.java`, and `generated/` —
+test doubles and codegen are real matches and useless findings.
+
+**Precision is enforced, not asserted.** `npm run analyzer:check` runs the demo
+corpus and the test fixture through the real analyzer, checks every rule their
+READMEs document still fires, checks no undocumented rule fires, checks the
+clean files stay silent, and runs 15 known-correct Android patterns plus every
+suppression form through it. CI runs it on every push.
 
 ---
 

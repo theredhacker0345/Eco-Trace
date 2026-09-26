@@ -22,22 +22,22 @@ produce the expected findings on known-bad code.
 ## Expected EcoTrace Findings
 
 When you run `analyzeProject()` on this fixture the analyzer should report
-exactly these findings (sorted Critical → High):
+exactly these findings — no more, no fewer. `npm run analyzer:check` asserts
+both directions: every row below must fire, and nothing outside it may.
 
 | ID | Severity | Pattern Name | File | Notes |
 |---|---|---|---|---|
 | W01 | Critical | Unclosed WakeLock | `SyncService.java` | `acquire()` present; `release()` not in a `finally` block |
-| W04 | Critical | PARTIAL_WAKE_LOCK in Background Service | `SyncService.java` | `PARTIAL_WAKE_LOCK` inside a `Service` subclass |
+| W04 | Critical | PARTIAL_WAKE_LOCK in Background Service | `SyncService.java` | `PARTIAL_WAKE_LOCK` acquired inside a `Service` subclass |
 | L01 | Critical | GPS Update Interval < 30 Seconds | `LocationTracker.java` | `5000` ms interval (< 30 000 ms threshold) |
-| L03 | Critical | Sensor Not Unregistered in onPause/onStop | `LocationTracker.java` | `registerListener()` with no `unregisterListener()` in file |
-| N02 | High | No Connection Timeout | `SyncService.java` | `OkHttpClient` with no `connectTimeout()` |
-| A01 | High | Service With No stopSelf() | `SyncService.java` | `onStartCommand()` returns `START_STICKY` with no `stopSelf()` |
+| L03 | Critical | Listener Not Unregistered in onPause/onStop | `LocationTracker.java` | location and sensor registrations with no teardown in file |
+| N02 | High | No Connection Timeout | `SyncService.java` | `OkHttpClient` constructed with no `connectTimeout()` |
+| A01 | High | Service With No stopSelf() | `SyncService.java` | `onStartCommand()` returns `START_STICKY` with no `stopSelf(...)` |
 | A06 | High | AlarmManager WAKEUP for Non-Critical Work | `MainActivity.java` | `RTC_WAKEUP` alarm for periodic sync |
+| L02 | High | FINE Location When COARSE Sufficient | `LocationTracker.java` | `GPS_PROVIDER` requested with no power priority |
 | L04 | High | Full-Rate Accelerometer for Step Counting | `LocationTracker.java` | `TYPE_ACCELEROMETER` + "step" keyword |
-
-> **Note on N06 (Polling Without FCM/WebSocket):** The analyzer may also flag
-> this because `MainActivity.java` uses `AlarmManager` + `SyncService` contains
-> `OkHttpClient`, and no FCM/WebSocket is present in the project.
+| A02 | High | Deferrable Work Using Raw Service | `SyncService.java` | sync work in a raw `Service`, no WorkManager in project |
+| A03 | Medium | JobScheduler Ignored for Background Sync | `SyncService.java` | network `Service` with no scheduling constraints |
 
 ---
 
@@ -62,4 +62,4 @@ const callGraph = buildCallGraph(files);
 console.log(`Found ${findings.length} findings`);
 ```
 
-Expected: **8 findings minimum** (4 Critical, 4 High), grade **F**.
+Expected: **11 findings** (4 Critical, 6 High, 1 Medium), grade **F**.

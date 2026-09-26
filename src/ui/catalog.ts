@@ -59,7 +59,7 @@ export const CATALOG: CatalogGroup[] = [
     detectors: [
       { id: "L01", name: "GPS interval under 30 seconds", severity: "Critical" },
       { id: "L02", name: "FINE location where COARSE suffices", severity: "High" },
-      { id: "L03", name: "Sensor not unregistered on pause", severity: "Critical" },
+      { id: "L03", name: "Listener not unregistered on pause", severity: "Critical" },
       { id: "L04", name: "Full-rate accelerometer for step counting", severity: "High" },
       { id: "L05", name: "Geofencing implemented by polling", severity: "High" },
     ],

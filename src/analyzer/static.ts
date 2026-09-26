@@ -145,9 +145,31 @@ export function stripComments(content: string): string {
   return out.join("");
 }
 
-/** Strip comments once per file; detectors only ever see comment-free source. */
+/**
+ * Blank out `import` lines while preserving every newline.
+ *
+ * An import is a *mention* of a class, not a *use* of it. The N-series
+ * detectors ask "is an HTTP client configured in this file", and
+ * `import okhttp3.OkHttpClient;` answered yes — so a file that merely named the
+ * class was reported as having no connect timeout. That was the single largest
+ * source of false positives in the tool.
+ *
+ * Blanking rather than deleting keeps the line numbering that findings, the
+ * inspector and the exported report all index by.
+ */
+function blankImports(content: string): string {
+  return content
+    .split(/\r?\n/)
+    .map((line) => (/^\s*import\s/.test(line) ? "" : line))
+    .join("\n");
+}
+
+/** Strip comments and imports once per file; detectors only ever see code. */
 function withoutComments(files: FileContent[]): FileContent[] {
-  return files.map((f) => ({ ...f, content: stripComments(f.content) }));
+  return files.map((f) => ({
+    ...f,
+    content: blankImports(stripComments(f.content)),
+  }));
 }
 
 /** Return the 1-based line number of the first regex match, or -1. */
@@ -159,19 +181,259 @@ function firstMatchLine(content: string, re: RegExp): number {
   return -1;
 }
 
-/** Return all 1-based line numbers matching re. */
-function allMatchLines(content: string, re: RegExp): number[] {
-  const ls = lines(content);
-  const result: number[] = [];
-  for (let i = 0; i < ls.length; i++) {
-    if (re.test(ls[i])) result.push(i + 1);
-  }
-  return result;
-}
-
 function snippet(content: string, lineNo: number): string {
   const ls = lines(content);
   return (ls[lineNo - 1] ?? "").trim();
+}
+
+// ---------------------------------------------------------------------------
+// Precision helpers
+//
+// Every detector is a regex over source text, so the difference between a
+// finding and a false positive is nearly always whether the matched token is a
+// *use* of the API or merely a *mention* of it. These helpers encode that
+// distinction once instead of leaving each detector to re-invent it:
+//
+//   mention — an import, a permission constant, an XML namespace, a doc string
+//   use     — a constructor call, a setter on the same receiver, a lifecycle pairing
+//
+// Tightening a detector is only worth doing if the corpus proves it, which is
+// what `npm run analyzer:check` does: the demo corpus and the test fixture must
+// still produce every rule their documentation claims.
+// ---------------------------------------------------------------------------
+
+/** Evidence that this file creates, holds or names a PowerManager WakeLock. */
+const WAKELOCK_EVIDENCE = /newWakeLock\s*\(|PowerManager\.WakeLock|WakeLock\b/i;
+
+/**
+ * Evidence that this file *constructs* an HTTP client, as opposed to importing
+ * one, receiving one as a parameter, or referring to one in a type position.
+ */
+const HTTP_CLIENT_CONSTRUCTED =
+  /new\s+OkHttpClient\s*\(|OkHttpClient\s*\(\s*\)|OkHttpClient\.Builder|new\s+Retrofit|Retrofit\.Builder|new\s+URL\s*\([^)]*\)\s*\.\s*openConnection\s*\(|\.openConnection\s*\(|HttpURLConnection/;
+
+/** Evidence that a call actually goes to the network, at a call site. */
+const NETWORK_CALL_SITE =
+  /\.newCall\s*\(|\.enqueue\s*\(|\.execute\s*\(\s*\)|getInputStream\s*\(|openConnection\s*\(|new\s+OkHttpClient\s*\(|OkHttpClient\s*\(\s*\)|Retrofit|HttpURLConnection/;
+
+/**
+ * Teardown calls that legitimately balance a sensor or location registration.
+ * The platform offers several spellings, and a base class or ViewModel may own
+ * the deregistration, so the previous "same file must contain
+ * `unregisterListener(`" test reported correct code as a leak.
+ */
+const LISTENER_TEARDOWN =
+  /unregisterListener\s*\(|removeUpdates\s*\(|removeLocationUpdates\s*\(/;
+
+/**
+ * Evidence of a server-push channel, so a poller is only reported when the
+ * platform push option is genuinely absent. These are matched with word
+ * boundaries because the first version matched `SSE` inside `SUCCESSES`, and a
+ * single counter name was enough to silence the rule project-wide.
+ */
+const PUSH_CHANNEL =
+  /FirebaseMessaging|\bFCM\b|\bSSE\b|WebSocket\s*\(|EventSource\s*\(/;
+
+/**
+ * Hosts that appear in `http://` strings without being endpoints: XML
+ * namespaces, platform schema URIs and documentation links. Reporting these as
+ * cleartext traffic is noise, and noise is what makes a report untrustworthy.
+ */
+const NON_ENDPOINT_HOST =
+  /^http:\/\/(?:schemas\.android\.com|www\.w3\.org|w3\.org|xmlpull\.org|xml\.org|apache\.org|www\.apache\.org|purl\.org|ns\.adobe\.com|schemas\.microsoft\.com|json-schema\.org)(?:\/|$)/i;
+
+/** Hosts that are reachable only from a development machine or an emulator. */
+const LOCAL_HOST = /^(?:localhost|127\.0\.0\.1|10\.0\.2\.2|0\.0\.0\.0|\[::1\])(?::|$)/i;
+
+/** The method name enclosing `lineNo` (1-based) in `content`, or "<top>". */
+function enclosingMethod(content: string, lineNo: number): string {
+  const ls = lines(content);
+  const defRe =
+    /(?:fun\s+|(?:public|private|protected|internal|static|final|override|suspend)\s+(?:[\w<>\[\],. ]+\s+)*)(\w+)\s*\(/;
+  for (let i = Math.min(lineNo - 1, ls.length - 1); i >= 0; i--) {
+    const m = defRe.exec(ls[i]);
+    if (!m) continue;
+    const name = m[1];
+    if (
+      !/^(if|for|while|switch|when|catch|new|return|class|interface|try|else)$/.test(
+        name
+      )
+    ) {
+      return name;
+    }
+  }
+  return "<top>";
+}
+
+/**
+ * Every `<receiver>.acquire(` site, with the receiver name and line number.
+ *
+ * The receiver is what makes two acquisitions interesting: the same lock
+ * acquired twice is a counting bug, two different locks in two unrelated
+ * methods are two independent operations.
+ */
+function acquireSites(content: string): Array<{ receiver: string; line: number }> {
+  const out: Array<{ receiver: string; line: number }> = [];
+  const ls = lines(content);
+  const re = /([A-Za-z_$][\w$]*)\s*\.\s*acquire\s*\(/g;
+  for (let i = 0; i < ls.length; i++) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(ls[i])) !== null) out.push({ receiver: m[1], line: i + 1 });
+  }
+  return out;
+}
+
+/** Numeric constants declared in this file, so `UPDATE_INTERVAL_MS` has a value. */
+function numericConstants(content: string): Map<string, number> {
+  const values = new Map<string, number>();
+  const re =
+    /(?:static\s+final|final\s+static|const\s+val|const)\s+(?:long|int|float|double|Int|Long|Float|Double)?\s*([A-Za-z_$][\w$]*)\s*=\s*(\d[\d_]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    values.set(m[1], Number(m[2].replace(/_/g, "")));
+  }
+  return values;
+}
+
+/** Text inside the first balanced parenthesis pair at or after `from`. */
+function callArguments(text: string, from: number): string {
+  const open = text.indexOf("(", from);
+  if (open === -1) return "";
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "(") depth++;
+    else if (text[i] === ")") {
+      depth--;
+      if (depth === 0) return text.slice(open + 1, i);
+    }
+  }
+  return text.slice(open + 1);
+}
+
+/** True when `onBind()` returns something other than `null`, i.e. a bound service. */
+function isBoundService(content: string): boolean {
+  const m = content.match(/IBinder\s+onBind\s*\([^)]*\)\s*\{([\s\S]{0,240}?)\}/);
+  if (!m) return false;
+  return !/\breturn\s+null\b/.test(m[1]);
+}
+
+/**
+ * Suppression directives, read from the file **as written**.
+ *
+ * Directives live in comments and annotations, and comments are stripped before
+ * any detector runs, so the index has to be built from the original text. The
+ * reason this exists: a local regex cannot see that a WakeLock is released by a
+ * lifecycle observer three files away, and a developer who knows that should be
+ * able to say so where the code is, rather than in a bug tracker.
+ *
+ *   // ecotrace-ignore W01,N02         suppress those rules on this line
+ *   // ecotrace-ignore                  suppress every rule on this line
+ *   // ecotrace-disable-next-line W01   suppress on the following line
+ *   // ecotrace-ignore-file N02         suppress across the whole file
+ *   @Suppress("EcoTrace:W01")          suppress across the whole file
+ */
+interface Suppressions {
+  file: Set<string>;
+  lines: Map<number, Set<string>>;
+}
+
+const SUPPRESSION_RULE = /^(?:ECOTRACE:)?[WNLA]\d{2}$/i;
+
+function collectSuppressions(content: string): Suppressions {
+  const fileWide = new Set<string>();
+  const lineScoped = new Map<number, Set<string>>();
+
+  const add = (lineNo: number, ids: string[]): void => {
+    const set = lineScoped.get(lineNo) ?? new Set<string>();
+    for (const id of ids) set.add(id);
+    lineScoped.set(lineNo, set);
+  };
+
+  /** Turns the text after a directive into rule ids; a bare directive = all. */
+  const parse = (raw: string): string[] => {
+    const ids = raw
+      .split(/[\s,;"'{}\[\]]+/)
+      .map((t) => t.trim().toUpperCase())
+      .filter((t) => SUPPRESSION_RULE.test(t))
+      .map((t) => t.replace(/^ECOTRACE:/, ""));
+    return ids.length > 0 ? ids : ["*"];
+  };
+
+  const src = content.split(/\r?\n/);
+
+  for (let i = 0; i < src.length; i++) {
+    const line = src[i];
+
+    const fileDirective = line.match(/ecotrace-ignore-file\b([^*]*)/i);
+    if (fileDirective) {
+      for (const id of parse(fileDirective[1])) fileWide.add(id);
+      continue;
+    }
+
+    const nextLine = line.match(/ecotrace-disable-next-line\b([^*]*)/i);
+    if (nextLine) {
+      for (const id of parse(nextLine[1])) add(i + 2, [id]);
+      continue;
+    }
+
+    const inline = line.match(/ecotrace-ignore\b([^*]*)/i);
+    if (inline) {
+      for (const id of parse(inline[1])) add(i + 1, [id]);
+    }
+
+    // An annotation that names EcoTrace explicitly opts the whole file out,
+    // because that is the only reading under which the prefix means anything.
+    // A generic @Suppress("W01") is scoped to the declaration it annotates.
+    const annotationRe = /@Suppress(?:Warnings)?\s*\(\s*\{?\s*"([^"]+)"[^)]*\)/g;
+    let annotation: RegExpExecArray | null;
+    while ((annotation = annotationRe.exec(line)) !== null) {
+      const value = annotation[1];
+      const ids = parse(value);
+      if (/ecotrace:/i.test(value)) {
+        for (const id of ids) fileWide.add(id);
+      } else {
+        for (const id of ids) add(i + 1, [id]);
+      }
+    }
+  }
+
+  return { file: fileWide, lines: lineScoped };
+}
+
+/**
+ * Whether a directive covers `line`.
+ *
+ * A directive on the line above a finding counts too, because that is where a
+ * comment explaining "this lock is intentional" naturally sits.
+ */
+function suppressionApplies(s: Suppressions, line: number, rule: string): boolean {
+  if (s.file.has("*") || s.file.has(rule)) return true;
+  for (let i = 0; i < 2; i++) {
+    const set = s.lines.get(line - i);
+    if (set && (set.has("*") || set.has(rule))) return true;
+  }
+  return false;
+}
+
+/**
+ * Files that are not the product's own shipped code.
+ *
+ * An instrumented test that deliberately leaks a WakeLock, a mock HTTP client
+ * with no timeout, and generated code from a codegen step are all real matches
+ * and all useless findings: nobody ships them, and reporting them is how a
+ * report earns a reputation for crying wolf.
+ */
+function isNonProductionPath(path: string): boolean {
+  const p = path.replace(/\\/g, "/").toLowerCase();
+  return (
+    /\/src\/(test|androidtest)\//.test(p) ||
+    /\/tests?\//.test(p) ||
+    /(?:^|[^a-z])[^/\\]*tests?\.(?:java|kt)$/.test(p) ||
+    /(?:^|[^a-z])[^/\\]*spec\.(?:java|kt)$/.test(p) ||
+    /\/generated\//.test(p) ||
+    /\.g\.(?:java|kt)$/.test(p)
+  );
 }
 
 function finding(
@@ -204,15 +466,21 @@ function finding(
 
 // W01 — Unclosed WakeLock
 function detectW01(f: FileContent): Finding[] {
-  const acquireRe = /\.acquire\(/;
-  const releaseRe = /\.release\(/;
-  const hasAcquire = acquireRe.test(f.content);
-  const hasRelease = releaseRe.test(f.content);
-  if (!hasAcquire) return [];
-  // If acquire exists but release does not anywhere in the file → definite leak
-  // If both exist, check they're in a finally block
+  // A bare `.acquire(` is equally a semaphore, a mutex, a camera or a
+  // connection pool. Requiring WakeLock evidence in the same file is what
+  // separates "this file leaks a wake lock" from "this file calls a method
+  // called acquire", which was the rule's most common false positive.
+  if (!WAKELOCK_EVIDENCE.test(f.content)) return [];
+
+  const sites = acquireSites(f.content);
+  if (sites.length === 0) return [];
+
+  const hasRelease = /\.release\s*\(/.test(f.content);
+  const hasTryFinally = /finally\s*\{[\s\S]*?\.release\s*\(/.test(f.content);
+  // `use.withWakeLock { }` and library equivalents release for you.
+  const hasScopedApi = /\bwithWakeLock\b/.test(f.content);
+
   if (!hasRelease) {
-    const line = firstMatchLine(f.content, acquireRe);
     return [
       finding(
         "W01",
@@ -220,41 +488,50 @@ function detectW01(f: FileContent): Finding[] {
         "Critical",
         "Wakefulness",
         f.path,
-        line,
+        sites[0].line,
         f.content,
-        "WakeLock.acquire() called with no matching release() found in this file.",
+        `WakeLock.acquire() called on '${sites[0].receiver}' with no matching release() found in this file.`,
         "Trace acquire() call upward to find the lifecycle method that holds this WakeLock."
       ),
     ];
   }
-  // Both exist — check if release is only in try body, not finally.
-  // Use the 's' (dotAll) flag so '.' matches newlines in multi-line finally blocks.
-  const hasFinallyRelease = /finally\s*\{[\s\S]*?\.release\(/.test(f.content);
-  if (!hasFinallyRelease) {
-    const line = firstMatchLine(f.content, acquireRe);
-    return [
-      finding(
-        "W01",
-        "Unclosed WakeLock",
-        "Critical",
-        "Wakefulness",
-        f.path,
-        line,
-        f.content,
-        "WakeLock.acquire() found but release() is not in a finally block — leaked on error paths.",
-        "Wrap acquire/release in try/finally. Trace up to find which lifecycle method owns this lock."
-      ),
-    ];
-  }
-  return [];
+
+  // release() exists somewhere. It is not a leak when it is guaranteed by a
+  // finally block, when a scoped helper API is in use, or when the lock is
+  // acquired and released around a lifecycle callback pair — that last shape is
+  // the documented Android idiom, not an oversight.
+  const lifecyclePaired =
+    /\bon(?:Resume|Start|Create|StartCommand|Bind)\s*\(/.test(f.content) &&
+    /\bon(?:Pause|Stop|Destroy|DestroyView|Unbind)\s*\([\s\S]{0,400}?\.release\s*\(/.test(
+      f.content
+    );
+
+  if (hasTryFinally || hasScopedApi || lifecyclePaired) return [];
+
+  return [
+    finding(
+      "W01",
+      "Unclosed WakeLock",
+      "Critical",
+      "Wakefulness",
+      f.path,
+      sites[0].line,
+      f.content,
+      "WakeLock.acquire() found but release() is not guaranteed: it is not in a finally block and it does not sit on the matching lifecycle path, so an exception or an early return leaks the lock.",
+      "Wrap acquire/release in try/finally. Trace up to find which lifecycle method owns this lock."
+    ),
+  ];
 }
 
 // W02 — WakeLock across IPC boundary
 function detectW02(f: FileContent): Finding[] {
   const results: Finding[] = [];
+  // A non-blocking lifecycle callback paired with a binder call is only this
+  // defect if a wake lock is actually involved.
+  if (!WAKELOCK_EVIDENCE.test(f.content)) return [];
   const ls = lines(f.content);
   for (let i = 0; i < ls.length; i++) {
-    if (/\.acquire\(/.test(ls[i])) {
+    if (/([A-Za-z_$][\w$]*)\s*\.\s*acquire\s*\(/.test(ls[i])) {
       // Look within the next 10 lines for an IPC call. AIDL/binder calls are
       // matched by the trailing `...<method>(` on a bound-service reference,
       // which is the shape the previous placeholder pattern failed to catch.
@@ -281,10 +558,10 @@ function detectW02(f: FileContent): Finding[] {
 
 // W03 — WakeLock in AsyncTask
 function detectW03(f: FileContent): Finding[] {
-  const isAsyncTask =
-    /extends\s+AsyncTask|:\s*AsyncTask</.test(f.content);
+  const isAsyncTask = /extends\s+AsyncTask|:\s*AsyncTask</.test(f.content);
   if (!isAsyncTask) return [];
-  const line = firstMatchLine(f.content, /\.acquire\(/);
+  if (!WAKELOCK_EVIDENCE.test(f.content)) return [];
+  const line = firstMatchLine(f.content, /\.acquire\s*\(/);
   if (line === -1) return [];
   return [
     finding(
@@ -303,10 +580,18 @@ function detectW03(f: FileContent): Finding[] {
 
 // W04 — PARTIAL_WAKE_LOCK in background Service
 function detectW04(f: FileContent): Finding[] {
-  const isService = /extends\s+Service\b|:\s*Service\(\)/.test(f.content);
+  const isService = /extends\s+Service\b|:\s*Service\s*\(/.test(f.content);
   if (!isService) return [];
+  // The pattern is "a partial lock is *held* in a Service". A constant, a
+  // string, a commented-out line or a doc reference is not a held lock, and a
+  // service that never acquires one is not running the CPU awake.
+  if (!/newWakeLock\s*\(/.test(f.content)) return [];
   const line = firstMatchLine(f.content, /PARTIAL_WAKE_LOCK/);
   if (line === -1) return [];
+  if (!/\.acquire\s*\(/.test(f.content)) return [];
+  // A foreground service with an ongoing notification is the platform's
+  // sanctioned shape for long-running user-visible work, not this defect.
+  if (/startForeground\s*\(/.test(f.content)) return [];
   return [
     finding(
       "W04",
@@ -327,11 +612,12 @@ function detectW05(f: FileContent): Finding[] {
   const isReceiver =
     /extends\s+BroadcastReceiver|:\s*BroadcastReceiver\(\)/.test(f.content);
   if (!isReceiver) return [];
-  const hasAcquire = /\.acquire\(/.test(f.content);
+  if (!WAKELOCK_EVIDENCE.test(f.content)) return [];
+  const hasAcquire = /\.acquire\s*\(/.test(f.content);
   if (!hasAcquire) return [];
-  const hasGoAsync = /goAsync\(\)/.test(f.content);
+  const hasGoAsync = /goAsync\s*\(\)/.test(f.content);
   if (hasGoAsync) return [];
-  const line = firstMatchLine(f.content, /\.acquire\(/);
+  const line = firstMatchLine(f.content, /\.acquire\s*\(/);
   return [
     finding(
       "W05",
@@ -349,8 +635,34 @@ function detectW05(f: FileContent): Finding[] {
 
 // W06 — Nested WakeLock acquisition
 function detectW06(f: FileContent): Finding[] {
-  const acquireLines = allMatchLines(f.content, /\.acquire\(/);
-  if (acquireLines.length < 2) return [];
+  if (!WAKELOCK_EVIDENCE.test(f.content)) return [];
+  const sites = acquireSites(f.content);
+  if (sites.length < 2) return [];
+
+  // Two acquires in two unrelated methods are two independent, balanced
+  // operations — flagging that pair was the rule's false positive. What this
+  // rule is about is one lock (or one job) taken twice, so the pair must share
+  // a receiver or an enclosing method.
+  const byMethod = new Map<string, number[]>();
+  const byReceiver = new Map<string, number[]>();
+  for (const site of sites) {
+    const method = enclosingMethod(f.content, site.line);
+    byMethod.set(method, [...(byMethod.get(method) ?? []), site.line]);
+    byReceiver.set(site.receiver, [
+      ...(byReceiver.get(site.receiver) ?? []),
+      site.line,
+    ]);
+  }
+
+  const pair =
+    [...byMethod.values()].find((l) => l.length >= 2) ??
+    [...byReceiver.values()].find((l) => l.length >= 2);
+  if (!pair) return [];
+
+  // If every acquisition is inside a try/finally that releases, the counting is
+  // already correct and the pair is deliberate layering rather than a bug.
+  if (/finally\s*\{[\s\S]*?\.release\s*\(/.test(f.content)) return [];
+
   return [
     finding(
       "W06",
@@ -358,9 +670,9 @@ function detectW06(f: FileContent): Finding[] {
       "High",
       "Wakefulness",
       f.path,
-      acquireLines[1],
+      pair[1],
       f.content,
-      `WakeLock.acquire() appears ${acquireLines.length} times in this file — possible double-acquire on the same instance.`,
+      `WakeLock.acquire() is reached twice for the same lock or the same unit of work (lines ${pair[0]} and ${pair[1]}), so a single release() unbalances the count.`,
       "Find all callers of both methods. Is there a code path where both execute sequentially?"
     ),
   ];
@@ -370,50 +682,45 @@ function detectW06(f: FileContent): Finding[] {
 function detectN01(f: FileContent): Finding[] {
   const results: Finding[] = [];
   const ls = lines(f.content);
-  // Self-re-posting Handler
+
+  // One report per site, not per matching line. A self-reposting loop has two
+  // `postDelayed` lines (the re-post inside the callback and the kick-off
+  // outside it) that describe the same defect, and reporting both is noise.
+  const push = (line: number, name: string, description: string, hint: string): void => {
+    if (results.some((r) => Math.abs(r.line - line) <= 20)) return;
+    results.push(
+      finding("N01", name, "Critical", "Network", f.path, line, f.content, description, hint)
+    );
+  };
+
   for (let i = 0; i < ls.length; i++) {
-    if (/postDelayed\s*\(/.test(ls[i])) {
-      const window = ls.slice(Math.max(0, i - 5), i + 15).join("\n");
-      if (
-        /postDelayed\s*\(/.test(window.replace(ls[i], "")) &&
-        /execute\(|enqueue\(|getInputStream\(|fetch\(/.test(window)
-      ) {
-        results.push(
-          finding(
-            "N01",
-            "Network Call in PostDelayed Loop",
-            "Critical",
-            "Network",
-            f.path,
-            i + 1,
-            f.content,
-            "Handler.postDelayed() self-re-posts with a network call inside — continuous radio wake.",
-            "Find the entry point that starts this chain. Replace with WorkManager periodic work."
-          )
+    // Self-re-posting Handler. The previous guard was "any other postDelayed
+    // within ±5 lines", which fired on two unrelated timers in one file; the
+    // shape that actually drains is a callback that re-posts *itself*.
+    if (/\.postDelayed\s*\(/.test(ls[i])) {
+      const window = ls.slice(Math.max(0, i - 6), i + 14).join("\n");
+      const selfReposting = /\.postDelayed\s*\(\s*this\s*,/.test(window);
+      if (selfReposting && NETWORK_CALL_SITE.test(window)) {
+        push(
+          i + 1,
+          "Network Call in PostDelayed Loop",
+          "Handler.postDelayed() self-re-posts with a network call inside — continuous radio wake.",
+          "Find the entry point that starts this chain. Replace with WorkManager periodic work."
         );
       }
     }
-    // Network inside for/while loop
+
+    // Network inside a for/while loop. Both halves matter: a loop, and a call
+    // that actually goes to the network. Matching a bare `.execute(` flagged
+    // `list.execute(item)` and every `executor.execute(runnable)` in the file.
     if (/\b(for|while)\s*\(/.test(ls[i])) {
-      // Look for network calls within the next 15 lines (rough loop body)
       const body = ls.slice(i + 1, i + 16).join("\n");
-      if (
-        /\.execute\(|\.enqueue\(|getInputStream\(|HttpURLConnection|OkHttpClient|Retrofit/.test(
-          body
-        )
-      ) {
-        results.push(
-          finding(
-            "N01",
-            "Network Call Inside Loop",
-            "Critical",
-            "Network",
-            f.path,
-            i + 1,
-            f.content,
-            "Network call detected inside a for/while loop — unbounded repeated HTTP requests.",
-            "Batch requests outside the loop. Find what triggers this loop to identify the root cause."
-          )
+      if (NETWORK_CALL_SITE.test(body)) {
+        push(
+          i + 1,
+          "Network Call Inside Loop",
+          "Network call detected inside a for/while loop — unbounded repeated HTTP requests.",
+          "Batch requests outside the loop. Find what triggers this loop to identify the root cause."
         );
       }
     }
@@ -423,17 +730,24 @@ function detectN01(f: FileContent): Finding[] {
 
 // N02 — No connection timeout
 function detectN02(f: FileContent): Finding[] {
-  const hasOkHttp =
-    /OkHttpClient|HttpURLConnection|\.openConnection\(\)/.test(f.content);
-  if (!hasOkHttp) return [];
-  const hasConnectTimeout = /connectTimeout\s*\(|setConnectTimeout\s*\(/.test(
+  // The client has to be *constructed here*. A file that imports OkHttp, or
+  // that receives an already-configured client as a parameter, has no timeout
+  // to set — and reporting those files was the rule's dominant false positive.
+  if (!HTTP_CLIENT_CONSTRUCTED.test(f.content)) return [];
+  if (/connectTimeout\s*\(|setConnectTimeout\s*\(/.test(f.content)) return [];
+
+  const usesUrlConnection = /\.openConnection\s*\(|HttpURLConnection/.test(
     f.content
   );
-  if (hasConnectTimeout) return [];
-  const line = firstMatchLine(
-    f.content,
-    /OkHttpClient|HttpURLConnection|\.openConnection\(\)/
-  );
+  const line = firstMatchLine(f.content, HTTP_CLIENT_CONSTRUCTED);
+
+  // The two clients have different defaults, so they get different sentences.
+  // Saying "blocks indefinitely" about OkHttp would be wrong: it defaults to
+  // 10 seconds. Saying it about HttpURLConnection is exactly right.
+  const description = usesUrlConnection
+    ? "HttpURLConnection is used with no connect timeout. Its default is 0, which means *no timeout at all* — a hung socket blocks the calling thread until the OS tears the connection down."
+    : "An HTTP client is constructed here with no explicit connect timeout, so behaviour falls back to the library default (10 s for OkHttp). Pin an explicit value so a slow endpoint cannot hold a wake lock open by default.";
+
   return [
     finding(
       "N02",
@@ -443,7 +757,7 @@ function detectN02(f: FileContent): Finding[] {
       f.path,
       line,
       f.content,
-      "HTTP client created without a connection timeout — thread blocks indefinitely on slow networks.",
+      description,
       "Find where this client is instantiated. Is it a singleton shared across the app?"
     ),
   ];
@@ -451,22 +765,11 @@ function detectN02(f: FileContent): Finding[] {
 
 // N03 — No read timeout
 function detectN03(f: FileContent): Finding[] {
-  const hasOkHttp =
-    /OkHttpClient|HttpURLConnection|\.openConnection\(\)/.test(f.content);
-  if (!hasOkHttp) return [];
-  const hasReadTimeout = /readTimeout\s*\(|setReadTimeout\s*\(/.test(
-    f.content
-  );
-  if (hasReadTimeout) return [];
-  // Only flag if connect timeout IS set (N02 already covers the both-missing case)
-  const hasConnectTimeout = /connectTimeout\s*\(|setConnectTimeout\s*\(/.test(
-    f.content
-  );
-  if (!hasConnectTimeout) return []; // N02 covers this
-  const line = firstMatchLine(
-    f.content,
-    /OkHttpClient|HttpURLConnection|\.openConnection\(\)/
-  );
+  if (!HTTP_CLIENT_CONSTRUCTED.test(f.content)) return [];
+  if (/readTimeout\s*\(|setReadTimeout\s*\(/.test(f.content)) return [];
+  // Only flag the half-configured case; N02 covers the both-missing one.
+  if (!/connectTimeout\s*\(|setConnectTimeout\s*\(/.test(f.content)) return [];
+  const line = firstMatchLine(f.content, HTTP_CLIENT_CONSTRUCTED);
   return [
     finding(
       "N03",
@@ -486,41 +789,51 @@ function detectN03(f: FileContent): Finding[] {
 function detectN04(f: FileContent): Finding[] {
   const results: Finding[] = [];
   const ls = lines(f.content);
-  const httpRe = /"http:\/\/(?!localhost|127\.0\.0\.1|10\.0\.2\.2)/;
   for (let i = 0; i < ls.length; i++) {
-    if (httpRe.test(ls[i])) {
-      results.push(
-        finding(
-          "N04",
-          "HTTP Instead of HTTPS",
-          "High",
-          "Network",
-          f.path,
-          i + 1,
-          f.content,
-          'Plaintext HTTP URL found. On Android 9+ cleartext is blocked by default; retries waste radio time.',
-          "Find where this URL is defined. Is it a constant? Trace to the network call site."
-        )
-      );
-    }
+    const url = ls[i].match(/http:\/\/[^"'\s)]+/);
+    if (!url) continue;
+    // XML namespaces and platform schema URIs are not endpoints and are not
+    // fetched; a report that flags `http://schemas.android.com/...` is a report
+    // nobody reads to the end.
+    if (NON_ENDPOINT_HOST.test(url[0])) continue;
+    if (LOCAL_HOST.test(url[0].slice("http://".length))) continue;
+    results.push(
+      finding(
+        "N04",
+        "HTTP Instead of HTTPS",
+        "High",
+        "Network",
+        f.path,
+        i + 1,
+        f.content,
+        "Plaintext HTTP endpoint found. On Android 9+ cleartext is blocked by default, so the first attempt fails and the retry costs another radio wakeup.",
+        "Find where this URL is defined. Is it a constant? Trace to the network call site."
+      )
+    );
   }
   return results;
 }
 
 // N05 — Synchronous network on main thread
 function detectN05(f: FileContent): Finding[] {
-  // Look for .execute() (not .enqueue()) in Activity/Fragment/View context
   const isUiContext =
-    /extends\s+(Activity|Fragment|AppCompatActivity|FragmentActivity|View)\b/.test(
+    /extends\s+(Activity|Fragment|AppCompatActivity|FragmentActivity|View|ComponentActivity)\b/.test(
       f.content
     ) ||
-    /:\s*(Activity|Fragment|AppCompatActivity|FragmentActivity|View)\(/.test(
+    /:\s*(Activity|Fragment|AppCompatActivity|FragmentActivity|View|ComponentActivity)\s*\(/.test(
       f.content
     );
   if (!isUiContext) return [];
-  const hasSyncCall = /\.execute\(\)|getInputStream\(\)/.test(f.content);
-  if (!hasSyncCall) return [];
-  const line = firstMatchLine(f.content, /\.execute\(\)|getInputStream\(\)/);
+
+  // A synchronous *network* call is the defect: `.execute()` on a database, a
+  // query builder or a shell command is not one. An AsyncTask moves the call
+  // off the main thread by construction, so a body that calls it is not this
+  // rule.
+  const syncRe = /\.newCall\s*\([^;]*?\)\s*\.\s*execute\s*\(\s*\)|getInputStream\s*\(\s*\)/;
+  if (!syncRe.test(f.content)) return [];
+  if (/doInBackground\s*\(/.test(f.content)) return [];
+
+  const line = firstMatchLine(f.content, syncRe);
   return [
     finding(
       "N05",
@@ -530,7 +843,7 @@ function detectN05(f: FileContent): Finding[] {
       f.path,
       line,
       f.content,
-      "Synchronous HTTP call (.execute() or getInputStream()) in a UI class (Activity/Fragment/View). Causes NetworkOnMainThreadException on API 11+.",
+      "Synchronous HTTP call in a UI class (Activity/Fragment/View). On API 11+ this throws NetworkOnMainThreadException; where it does not, it blocks the frame loop.",
       "Root cause: this Activity/Fragment method. Move to Dispatchers.IO coroutine or use .enqueue() async callback."
     ),
   ];
@@ -538,25 +851,19 @@ function detectN05(f: FileContent): Finding[] {
 
 // N06 — Polling without FCM/WebSocket
 function detectN06(files: FileContent[], f: FileContent): Finding[] {
-  // Only flag if: this file has a repeating scheduler AND the whole project
-  // has no FCM/WebSocket usage
+  // Only flag if: this file re-arms a timer AND actually talks to the network
+  // (both are uses, not mentions), and the project has no push channel.
   const hasScheduler =
-    /AlarmManager|postDelayed|ScheduledExecutorService|scheduleAtFixedRate/.test(
+    /setRepeating\s*\(|setInexactRepeating\s*\(|RTC_WAKEUP|ELAPSED_REALTIME_WAKEUP|scheduleAtFixedRate\s*\(|\.postDelayed\s*\(\s*this\s*,|\.postDelayed\s*\(\s*\w+\s*,\s*[A-Z_]+/.test(
       f.content
     );
   if (!hasScheduler) return [];
-  const hasNetworkCall =
-    /OkHttpClient|HttpURLConnection|Retrofit|\.execute\(|\.enqueue\(/.test(
-      f.content
-    );
-  if (!hasNetworkCall) return [];
-  const projectHasPush = files.some((fi) =>
-    /FirebaseMessaging|WebSocket|SSE|EventSource|FCM/.test(fi.content)
-  );
+  if (!NETWORK_CALL_SITE.test(f.content)) return [];
+  const projectHasPush = files.some((fi) => PUSH_CHANNEL.test(fi.content));
   if (projectHasPush) return [];
   const line = firstMatchLine(
     f.content,
-    /AlarmManager|postDelayed|ScheduledExecutorService/
+    /setRepeating\s*\(|setInexactRepeating\s*\(|RTC_WAKEUP|ELAPSED_REALTIME_WAKEUP|scheduleAtFixedRate\s*\(|\.postDelayed\s*\(/
   );
   return [
     finding(
@@ -577,49 +884,73 @@ function detectN06(files: FileContent[], f: FileContent): Finding[] {
 function detectL01(f: FileContent): Finding[] {
   const results: Finding[] = [];
   const ls = lines(f.content);
-  // Match setInterval, requestLocationUpdates(GPS_PROVIDER, interval, ...)
-  const intervalRe =
-    /requestLocationUpdates|setInterval\s*\(|\.setInterval\s*\(/;
+  const constants = numericConstants(f.content);
+  const callRe =
+    /requestLocationUpdates\s*\(|setInterval\s*\(|setFastestInterval\s*\(|setMinUpdateIntervalMillis\s*\(/;
+
   for (let i = 0; i < ls.length; i++) {
-    if (intervalRe.test(ls[i])) {
-      // Extract numeric literal on this line or next
-      const context = ls.slice(i, i + 3).join(" ");
-      const numMatch = context.match(/\b(\d+)\b/);
-      if (numMatch) {
-        const val = parseInt(numMatch[1], 10);
-        // If value looks like ms (< 30000) flag it; if it looks like seconds < 30, flag
-        if (val < 30000 && val > 0) {
-          results.push(
-            finding(
-              "L01",
-              "GPS Update Interval < 30 Seconds",
-              "Critical",
-              "Location/Sensors",
-              f.path,
-              i + 1,
-              f.content,
-              `Location update interval appears to be ${val}ms (< 30s). High-frequency GPS is the single largest battery drain on mobile.`,
-              "Find where the LocationRequest or interval is defined. Trace to the entry point that starts location tracking."
-            )
-          );
-        }
+    const m = callRe.exec(ls[i]);
+    if (!m) continue;
+
+    // Only the call's *own* argument list is examined. The previous version
+    // took the first number within three lines, so a provider constant, a
+    // status code or a resource id could be reported as a 5 ms GPS interval.
+    //
+    // Named constants are resolved because nobody writes the literal inline:
+    // `requestLocationUpdates(GPS_PROVIDER, UPDATE_INTERVAL_MS, ...)` is the
+    // normal shape, and reading only literals missed it.
+    const raw = callArguments(ls.slice(i, i + 8).join(" "), m.index);
+    const args = raw.replace(/[A-Za-z_$][\w$]*/g, (id) =>
+      constants.has(id) ? String(constants.get(id)) : id
+    );
+    let interval = -1;
+
+    const numRe = /(\d[\d_]*)/g;
+    let n: RegExpExecArray | null;
+    while ((n = numRe.exec(args)) !== null) {
+      const value = Number(n[1].replace(/_/g, ""));
+      // A bare number under 30 is seconds rather than milliseconds; both
+      // readings sit below the 30-second floor this rule is about.
+      const ms = value > 0 && value < 30 ? value * 1000 : value;
+      if (ms > 0 && ms < 30_000) {
+        interval = ms;
+        break;
       }
     }
+    if (interval === -1) continue;
+
+    results.push(
+      finding(
+        "L01",
+        "GPS Update Interval < 30 Seconds",
+        "Critical",
+        "Location/Sensors",
+        f.path,
+        i + 1,
+        f.content,
+        `Location update interval is ${interval}ms (< 30s). High-frequency GPS is the single largest battery drain on mobile: the radio cannot sleep while a fix is pending.`,
+        "Find where the LocationRequest or interval is defined. Trace to the entry point that starts location tracking."
+      )
+    );
   }
   return results;
 }
 
 // L02 — FINE location when COARSE sufficient
 function detectL02(f: FileContent): Finding[] {
-  const hasFine =
-    /ACCESS_FINE_LOCATION|GPS_PROVIDER|PRIORITY_HIGH_ACCURACY/.test(
-      f.content
-    );
-  if (!hasFine) return [];
-  const line = firstMatchLine(
-    f.content,
-    /ACCESS_FINE_LOCATION|GPS_PROVIDER|PRIORITY_HIGH_ACCURACY/
-  );
+  // A request for high accuracy is the defect. Asking the platform whether the
+  // permission is granted — `checkSelfPermission(ACCESS_FINE_LOCATION)` — or
+  // naming the constant in a preferences class is not a request, and treating
+  // it as one was this rule's false positive.
+  const requestEvidence =
+    /requestLocationUpdates\s*\(|LocationRequest\.Builder|FusedLocationProviderClient|getCurrentLocation\s*\(|getLastLocation\s*\(|LocationManager\./;
+  if (!requestEvidence.test(f.content)) return [];
+
+  const fineRe =
+    /ACCESS_FINE_LOCATION|GPS_PROVIDER|PRIORITY_HIGH_ACCURACY|Priority\.PRIORITY_HIGH_ACCURACY/;
+  if (!fineRe.test(f.content)) return [];
+
+  const line = firstMatchLine(f.content, fineRe);
   return [
     finding(
       "L02",
@@ -629,29 +960,35 @@ function detectL02(f: FileContent): Finding[] {
       f.path,
       line,
       f.content,
-      "ACCESS_FINE_LOCATION / GPS_PROVIDER detected. Verify the feature actually needs sub-10m precision.",
+      "A location request asks for FINE accuracy / the GPS provider. Verify the feature actually needs sub-10 m precision — COARSE costs roughly a third of the power.",
       "Find the feature consuming this location. If it shows nearby POIs, weather, or city-level content — COARSE is sufficient."
     ),
   ];
 }
 
-// L03 — Sensor not unregistered in onPause/onStop
+// L03 — Listener registered with no matching teardown
 function detectL03(f: FileContent): Finding[] {
-  const hasRegister = /registerListener\s*\(/.test(f.content);
-  if (!hasRegister) return [];
-  const hasUnregister = /unregisterListener\s*\(/.test(f.content);
-  if (hasUnregister) return [];
-  const line = firstMatchLine(f.content, /registerListener\s*\(/);
+  // Both registrations are the same defect: a sensor callback and a location
+  // callback are both held open by the platform until something removes them,
+  // and a location listener outlives the screen exactly as a sensor one does.
+  const registerRe = /registerListener\s*\(|requestLocationUpdates\s*\(/;
+  if (!registerRe.test(f.content)) return [];
+  // Paired teardown is the fix, and the platform offers more than one spelling
+  // of it. Requiring `unregisterListener(` inside this same file reported a
+  // base class, a ViewModel or a `removeUpdates()`-based tracker as a leak.
+  if (LISTENER_TEARDOWN.test(f.content)) return [];
+
+  const line = firstMatchLine(f.content, registerRe);
   return [
     finding(
       "L03",
-      "Sensor Not Unregistered in onPause/onStop",
+      "Listener Not Unregistered in onPause/onStop",
       "Critical",
       "Location/Sensors",
       f.path,
       line,
       f.content,
-      "SensorManager.registerListener() called with no matching unregisterListener() in this file — sensor stays active when backgrounded.",
+      "A sensor or location listener is registered with no matching unregisterListener() / removeUpdates() anywhere in this file, so the provider keeps the callback alive after the screen is gone.",
       "Find this Activity/Fragment's onPause()/onStop(). Root cause: registration without deregistration."
     ),
   ];
@@ -681,9 +1018,14 @@ function detectL04(f: FileContent): Finding[] {
 
 // L05 — Geofencing via polling
 function detectL05(files: FileContent[], f: FileContent): Finding[] {
+  // Polling means a *loop that re-arms*, not the mere presence of a Handler:
+  // a Handler next to a location callback is ordinary UI plumbing. Requiring a
+  // real repeating schedule is what separates the two.
   const hasPollingLocation =
-    /requestLocationUpdates|getLastKnownLocation/.test(f.content) &&
-    /AlarmManager|postDelayed|Handler/.test(f.content);
+    /requestLocationUpdates|getLastKnownLocation\s*\(/.test(f.content) &&
+    /setRepeating\s*\(|setInexactRepeating\s*\(|RTC_WAKEUP|ELAPSED_REALTIME_WAKEUP|\.postDelayed\s*\(\s*this\s*,|scheduleAtFixedRate\s*\(/.test(
+      f.content
+    );
   if (!hasPollingLocation) return [];
   const hasDistanceCalc =
     /distanceTo\(|distanceBetween\(|Haversine|Math\.sin\(|Math\.cos\(/.test(
@@ -713,12 +1055,19 @@ function detectL05(files: FileContent[], f: FileContent): Finding[] {
 // A01 — Service with no stopSelf
 function detectA01(f: FileContent): Finding[] {
   const isService =
-    /extends\s+Service\b|extends\s+IntentService\b|:\s*Service\(\)|:\s*IntentService\(/.test(
+    /extends\s+Service\b|extends\s+IntentService\b|:\s*Service\s*\(|:\s*IntentService\s*\(/.test(
       f.content
     );
   if (!isService) return [];
-  const hasStopSelf = /stopSelf\(\)|stopService\(/.test(f.content);
-  if (hasStopSelf) return [];
+  // A bound service is stopped by its clients; `stopSelf()` is neither expected
+  // nor correct there.
+  if (isBoundService(f.content)) return [];
+  // `IntentService` calls `stopSelf()` itself once `onHandleIntent` returns.
+  if (/extends\s+IntentService\b|:\s*IntentService\s*\(/.test(f.content)) return [];
+  // `stopSelf(startId)` is the documented form. Requiring the empty-argument
+  // spelling made every correct call site invisible, and reported a flagged
+  // service as one that never stops.
+  if (/stopSelf\s*\(|stopService\s*\(/.test(f.content)) return [];
   const line = firstMatchLine(f.content, /onStartCommand|onHandleIntent/);
   if (line === -1) return [];
   return [
@@ -739,10 +1088,14 @@ function detectA01(f: FileContent): Finding[] {
 // A02 — Deferrable work using raw Service
 function detectA02(files: FileContent[], f: FileContent): Finding[] {
   const isService =
-    /extends\s+(Service|IntentService)\b|:\s*(Service|IntentService)\(/.test(
+    /extends\s+(Service|IntentService)\b|:\s*(Service|IntentService)\s*\(/.test(
       f.content
     );
   if (!isService) return [];
+  // A foreground service is user-visible by construction, and a bound service
+  // is driven by its client's lifecycle. "Deferrable" describes neither.
+  if (/startForeground\s*\(/.test(f.content)) return [];
+  if (isBoundService(f.content)) return [];
   const isDeferrableWork =
     /sync|upload|backup|analytics|report|flush/i.test(
       f.path + " " + f.content.slice(0, 500)
@@ -771,10 +1124,44 @@ function detectA02(files: FileContent[], f: FileContent): Finding[] {
 
 // A03 — JobScheduler ignored for background sync
 function detectA03(files: FileContent[], f: FileContent): Finding[] {
+  const submits = (content: string): boolean =>
+    /\.schedule\s*\(|WorkManager\s*\.\s*getInstance\s*\(|\.enqueue\s*\(\s*\w*(?:Request|Work)/.test(
+      content
+    );
+
+  // Shape 1 — constraints written and never submitted. A JobInfo built with
+  // `setPeriodic`/`setRequiredNetworkType` and no `schedule()` anywhere in the
+  // project is the most explicit form of this defect: the author knew what to
+  // do, and the submission never happened. The constraints are dead code, so
+  // the work that was supposed to be deferred runs unconstrained instead.
+  if (
+    /new\s+JobInfo\.Builder\s*\(/.test(f.content) &&
+    !files.some((fi) => submits(fi.content))
+  ) {
+    const line = firstMatchLine(f.content, /new\s+JobInfo\.Builder\s*\(/);
+    return [
+      finding(
+        "A03",
+        "JobScheduler Ignored for Background Sync",
+        "Medium",
+        "Lifecycle/Architecture",
+        f.path,
+        line,
+        f.content,
+        "A JobInfo is built with constraints and never submitted: nothing in the project calls jobScheduler.schedule(). The constraints never take effect, so the work runs with no network or charging requirement.",
+        "Submit the job with jobScheduler.schedule(jobInfo), or move the work to WorkManager."
+      ),
+    ];
+  }
+
+  // Shape 2 — network work in a Service, with no scheduling constraints at all.
+  // A network call inside a Service means a client that is *constructed* here,
+  // not an import or a type reference.
   const hasNetworkInService =
-    /extends\s+Service\b|:\s*Service\(\)/.test(f.content) &&
-    /OkHttpClient|HttpURLConnection|Retrofit/.test(f.content);
+    /extends\s+Service\b|:\s*Service\s*\(/.test(f.content) &&
+    HTTP_CLIENT_CONSTRUCTED.test(f.content);
   if (!hasNetworkInService) return [];
+  if (firstMatchLine(f.content, /onStartCommand|onHandleIntent/) === -1) return [];
   const hasConstraints = /setRequiredNetworkType|setRequiresCharging|JobScheduler|JobInfo/.test(
     f.content
   );
@@ -783,7 +1170,7 @@ function detectA03(files: FileContent[], f: FileContent): Finding[] {
     /WorkManager|JobScheduler/.test(fi.content)
   );
   if (projectHasWorkManager) return [];
-  const line = firstMatchLine(f.content, /OkHttpClient|HttpURLConnection/);
+  const line = firstMatchLine(f.content, HTTP_CLIENT_CONSTRUCTED);
   return [
     finding(
       "A03",
@@ -891,6 +1278,9 @@ function detectA05(f: FileContent): Finding[] {
 
 // A06 — AlarmManager WAKEUP for non-critical work
 function detectA06(f: FileContent): Finding[] {
+  // `setAlarmClock()` is the API for a user-visible alarm or reminder, and it is
+  // *supposed* to wake the device. That is not this defect.
+  if (/setAlarmClock\s*\(/.test(f.content)) return [];
   const re =
     /ELAPSED_REALTIME_WAKEUP|RTC_WAKEUP|setExactAndAllowWhileIdle\s*\(/;
   const line = firstMatchLine(f.content, re);
@@ -1089,13 +1479,22 @@ function detectMethodAtLine(f: Finding, sources: Map<string, string>): string {
 export function analyzeProject(files: FileContent[]): Finding[] {
   const results: Finding[] = [];
 
-  // Detectors run against comment-free source. Without this, documentation
-  // comments that *name* an anti-pattern (e.g. "W01 — WakeLock.acquire()")
-  // both raise false positives and suppress real detections, because the
-  // negative guard sees the word in prose.
-  const scan = withoutComments(files);
+  // Detectors run against comment-free, import-free source. Without the first,
+  // documentation comments that *name* an anti-pattern (e.g. "W01 —
+  // WakeLock.acquire()") both raise false positives and suppress real
+  // detections, because the negative guard sees the word in prose. Without the
+  // second, merely importing a class counted as using it.
+  //
+  // Test trees and generated code are excluded outright: a fixture that
+  // deliberately leaks a WakeLock is a real match and a useless finding.
+  const scan = withoutComments(files).filter((f) => !isNonProductionPath(f.path));
   const originalByPath = new Map<string, string>();
   for (const f of files) originalByPath.set(f.path, f.content);
+
+  // Suppression directives are read from the sources as written, because they
+  // live in the comments the detectors never see.
+  const suppressions = new Map<string, Suppressions>();
+  for (const f of files) suppressions.set(f.path, collectSuppressions(f.content));
 
   for (const f of scan) {
     results.push(...detectW01(f));
@@ -1125,6 +1524,16 @@ export function analyzeProject(files: FileContent[]): Finding[] {
     results.push(...detectA05(f));
     results.push(...detectA06(f));
   }
+
+  // Inline suppression, applied after every detector has run so that no rule
+  // can opt itself out of the filter. `results` is spliced in place rather than
+  // reassigned because it is the array the rest of this function indexes.
+  const kept = results.filter((r) => {
+    const s = suppressions.get(r.file);
+    return !s || !suppressionApplies(s, r.line, r.patternId);
+  });
+  results.length = 0;
+  results.push(...kept);
 
   // Report the real source line, not the comment-stripped copy.
   for (const r of results) {

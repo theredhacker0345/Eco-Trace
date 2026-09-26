@@ -34,3 +34,11 @@ jobs:
       # out. This step is the reason that cannot happen again.
       - name: Validate GitHub Actions workflows
         run: npm run workflow:lint
+
+      # The analyzer's contract with its own corpus: every rule the demo and the
+      # test fixture document must still fire, nothing undocumented may fire in
+      # them, the clean files stay silent, and the known-false-positive cases
+      # (an import mistaken for a use, a permission check mistaken for a request)
+      # stay quiet. This is the check that a detector tightening loses.
+      - name: Analyzer precision check
+        run: npm run analyzer:check
