@@ -472,8 +472,11 @@ body[data-resizing='true'] * {
 // ===========================================================================
 
 .cx-palette {
-  justify-content: flex-start;
+  // Column direction so `align-items` centres the panel horizontally and
+  // `justify-content` controls its vertical offset from the top of the window.
+  flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   padding-top: 12vh;
 }
 
@@ -524,6 +527,13 @@ body[data-resizing='true'] * {
 
 .cx-palette__field::placeholder {
   color: var(--cx-text-placeholder);
+}
+
+// The whole panel is the focus context while the palette is open, and the
+// caret already marks the field as active. A ring inside the panel would draw
+// a box inside a box.
+.cx-palette__field:focus-visible {
+  outline: none;
 }
 
 .cx-palette__list {
@@ -804,7 +814,6 @@ body[data-resizing='true'] * {
   margin-top: 2px;
   fill: currentColor;
 }
-
 .cx-toast__body {
   flex: 1;
   min-width: 0;
@@ -1073,14 +1082,61 @@ body[data-resizing='true'] * {
 // ---------------------------------------------------------------------------
 // Narrow viewports
 //
-// Below 1280px the three-pane workbench stops being readable, so the inspector
-// becomes an overlay sheet. Below 960px the navigator does too. Both stay
-// reachable from the header.
+// Three degradations, each triggered at the width where the thing it protects
+// stops being usable:
+//
+//   1280px  the three-pane workbench is no longer readable, so the inspector
+//           is promoted to an overlay sheet and the header sheds its text
+//           labels (icons carry the meaning) to keep the actions reachable.
+//    960px  the same happens to the navigator.
 // ---------------------------------------------------------------------------
+
+// A sheet gets a scrim, so the pane behind it reads as inactive rather than as
+// the primary surface. z-index sits below the sheet (90) and above the
+// workbench, and the click handler lives in panes.ts.
+body[data-sheet='true']::after {
+  content: '';
+  position: fixed;
+  inset: var(--cx-shell-header-h) 0 var(--cx-statusbar-h) 0;
+  background: var(--cds-overlay);
+  z-index: 80;
+  animation: cx-fade-in var(--cx-duration-standard) var(--cx-ease-productive);
+}
+
+@keyframes cx-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// Disclosure buttons exist only in the layouts that need them.
+.cx-under-1280,
+.cx-under-960 {
+  display: none;
+}
 
 @media (max-width: 1280px) {
   .cx-shell__body {
     grid-template-columns: var(--pane-nav, 264px) 1px minmax(0, 1fr) 0 0;
+  }
+
+  .cx-under-1280 {
+    display: inline-flex;
+  }
+
+  // The connection chip drops its label first: its state is already carried by
+  // the dot, and it is the only element in the group whose text is
+  // redundant. Button labels stay, because "Open project" and "Export report"
+  // are not guessable from an icon.
+  .cx-conn {
+    padding: 0 var(--cx-space-xs);
+  }
+
+  .cx-conn #bob-status-label {
+    display: none;
   }
 
   .cx-splitter--inspector {
@@ -1108,6 +1164,10 @@ body[data-resizing='true'] * {
 @media (max-width: 960px) {
   .cx-shell__body {
     grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+  }
+
+  .cx-under-960 {
+    display: inline-flex;
   }
 
   .cx-splitter--nav {

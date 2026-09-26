@@ -21,12 +21,16 @@ import { esc, icon, qs, qsa } from "./dom.js";
 import { relPath } from "./format.js";
 import { activeSeverities } from "./navigator.js";
 import { allFixes as allFixText } from "./remediation.js";
-import { emit, state, subscribe, type LogLevel } from "./store.js";
+import {
+  emit,
+  sortFindings,
+  state,
+  subscribe,
+  type LogLevel,
+  type SortKey,
+} from "./store.js";
 
-type SortKey = "severity" | "pattern" | "file" | "category";
 type Scope = "all" | "flagged" | "selected";
-
-const SEVERITY_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2 };
 
 let sortKey: SortKey = "severity";
 let sortAsc = true;
@@ -42,11 +46,16 @@ function keyOf(finding: Finding): string {
   return `${finding.patternId}|${finding.file}|${finding.line}`;
 }
 
+/**
+ * Applies the view filters. Sorting is not applied here: the canonical list in
+ * the store is already sorted, so a row's index is its position, and filtering
+ * can never renumber what the inspector reports.
+ */
 function visibleFindings(): Finding[] {
   const q = query.trim().toLowerCase();
   const flagged = new Set(state.findings.map((f) => f.file));
 
-  const filtered = state.findings.filter((finding) => {
+  return state.findings.filter((finding) => {
     if (!activeSeverities.has(finding.severity.toLowerCase())) return false;
     if (scope === "selected" && finding.file !== state.selectedFile) return false;
     if (scope === "flagged" && !flagged.has(finding.file)) return false;
@@ -59,33 +68,24 @@ function visibleFindings(): Finding[] {
       relPath(finding.file, state.projectPath).toLowerCase().includes(q)
     );
   });
+}
 
-  const direction = sortAsc ? 1 : -1;
-  filtered.sort((a, b) => {
-    let delta = 0;
-    switch (sortKey) {
-      case "severity":
-        delta = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
-        if (delta === 0) delta = a.patternId.localeCompare(b.patternId);
-        break;
-      case "pattern":
-        delta = a.patternName.localeCompare(b.patternName);
-        break;
-      case "category":
-        delta = a.category.localeCompare(b.category);
-        if (delta === 0) delta = a.patternId.localeCompare(b.patternId);
-        break;
-      case "file":
-        delta = relPath(a.file, state.projectPath).localeCompare(
-          relPath(b.file, state.projectPath)
-        );
-        if (delta === 0) delta = a.line - b.line;
-        break;
-    }
-    return delta * direction;
-  });
+/** Re-sorts the canonical list and republishes the sort indicator. */
+function applySort(key: SortKey, ascending: boolean): void {
+  sortKey = key;
+  sortAsc = ascending;
+  sortFindings(key, ascending);
 
-  return filtered;
+  const select = qs<HTMLSelectElement>("input-sort");
+  if (select.value !== key) select.value = key;
+
+  for (const th of qsa<HTMLElement>("th[data-sort]")) {
+    th.setAttribute(
+      "aria-sort",
+      th.dataset.sort === key ? (ascending ? "ascending" : "descending") : "none"
+    );
+  }
+  emit("findings");
 }
 
 function severityTag(finding: Finding): string {
@@ -231,6 +231,9 @@ function renderSummary(rows: Finding[]): void {
   const summary = qs("findings-summary");
   const hasScan = state.findings.length > 0;
   summary.hidden = !hasScan;
+
+  const copyBtn = qs<HTMLButtonElement>("btn-copy-fixes");
+  copyBtn.disabled = rows.length === 0;
   if (!hasScan) return;
 
   const tally = { critical: 0, high: 0, medium: 0 } as Record<LogLevel, number>;
@@ -398,25 +401,10 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
-function applySort(key: SortKey): void {
-  if (sortKey === key) {
-    sortAsc = !sortAsc;
-  } else {
-    sortKey = key;
-    sortAsc = key !== "file";
-  }
-
-  const select = qs<HTMLSelectElement>("input-sort");
-  select.value = key;
-
-  for (const th of qsa<HTMLElement>("th[data-sort]")) {
-    if (th.dataset.sort === key) {
-      th.setAttribute("aria-sort", sortAsc ? "ascending" : "descending");
-    } else {
-      th.setAttribute("aria-sort", "none");
-    }
-  }
-  render();
+/** Toggling the active column reverses it; a new column starts ascending. */
+function toggleSort(key: SortKey): void {
+  const ascending = sortKey === key ? !sortAsc : key !== "file";
+  applySort(key, ascending);
 }
 
 export function resetFilters(): void {
@@ -466,15 +454,8 @@ export function initFindingsTable(): void {
   });
 
   qs<HTMLSelectElement>("input-sort").addEventListener("change", (event) => {
-    sortKey = (event.target as HTMLSelectElement).value as SortKey;
-    sortAsc = sortKey !== "file";
-    for (const th of qsa<HTMLElement>("th[data-sort]")) {
-      th.setAttribute(
-        "aria-sort",
-        th.dataset.sort === sortKey ? (sortAsc ? "ascending" : "descending") : "none"
-      );
-    }
-    render();
+    const key = (event.target as HTMLSelectElement).value as SortKey;
+    applySort(key, key !== "file");
   });
 
   qs<HTMLSelectElement>("input-scope").addEventListener("change", (event) => {
@@ -487,7 +468,7 @@ export function initFindingsTable(): void {
 
     const header = target.closest<HTMLElement>("th[data-sort]");
     if (header?.dataset.sort) {
-      applySort(header.dataset.sort as SortKey);
+      toggleSort(header.dataset.sort as SortKey);
       return;
     }
 

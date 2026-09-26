@@ -202,13 +202,49 @@ val response = client.newBuilder()
 
 Every ADB profiling session is appended to a local scan history
 (`%APPDATA%\ecotrace\history.json`) via `saveScan()` in `src/grader/grade.ts`, and
-`loadHistory()` / `computeScoreProgress()` are implemented to read it back and compute
-per-scan score deltas.
+`loadHistory()` / `computeScoreProgress()` read it back and compute per-scan
+score deltas.
 
-**Current status:** the persistence layer exists and is written, but the timeline view
-is **not yet surfaced in the UI** — no timeline chart is rendered anywhere, and the
-exported report payload hardcodes an empty `history` array, so no score-over-time view
-is available yet. The storage layer is in place for that view.
+**Surfaced in the UI:** the **History** button in the status bar (or `Ctrl+H`)
+opens a panel listing every recorded scan with its grade, finding counts and
+score delta, so a refactor can be checked against the previous run rather than
+against a memory. The same series is written into the exported report's
+**Score timeline** section.
+
+---
+
+## Interface
+
+The workbench is built on the **IBM Carbon Design System** — IBM's own design
+system for enterprise products, and the reason the application reads as
+institutional software rather than as a dark-themed demo.
+
+| Carbon element | How EcoTrace uses it |
+|---|---|
+| **UI shell** | 48px header with product identity left, work-surface switcher centre, global actions right; 32px status bar pinned below the work surface |
+| **Theme tokens (g100 / g90 / white)** | The entire palette is generated from Carbon's theme maps, so a theme switch is a token swap with no component rule changing |
+| **IBM Plex Sans / Mono** | Bundled locally, not fetched — the app renders identically offline and in the packaged build |
+| **Data table** | Findings table with sortable headers, expandable rows, toolbar, and a rollup bar; row heights follow Carbon's 40px (lg) rhythm |
+| **Tags** | Severity tags use Carbon's support palette: Red 40 critical, Orange 40 high, Yellow 30 medium |
+| **Command palette** | `Ctrl+K` over every action, with each accelerator shown in the row's right gutter |
+| **Composed modal** | Settings and history, with focus trapped while open and returned to the trigger on close |
+| **Notification toast** | Bottom-left, severity in the icon and left edge, announced through a live region |
+| **2px spacing scale · 150/240ms motion** | Every gap and transition resolves to a Carbon token |
+
+**Interaction and accessibility**
+
+- Full keyboard operation: `Ctrl+K` commands, `F5` analyze, `Alt+↑/↓` step
+  through findings, `/` search, `Esc` closes, splitters resize with arrows.
+- Selection is bidirectional — picking a finding reveals its file in the tree,
+  picking a file scopes the table to it.
+- ARIA tree, tablist, tablists and live regions throughout; focus rings are
+  Carbon's 2px theme-focus token; `prefers-reduced-motion` and Windows
+  high-contrast are both honoured.
+
+The exported report uses Carbon's **white** theme — it is read in daylight,
+printed and archived rather than worked in at night — and embeds IBM Plex as a
+data URI so it renders identically for every recipient.
+
 
 ---
 
@@ -304,7 +340,8 @@ We ran EcoTrace against [Signal Android](https://github.com/signalapp/Signal-And
 | System layer | Rust (minimal) | ADB subprocess, file system access via Tauri commands |
 | AI engine | IBM Bob 2.0 | Full-repo context reasoning -- structurally irreplaceable |
 | Storage | Local JSON | Scan history, offline-first, zero cloud dependencies |
-| Styling | Pure CSS | Full design control, no framework overhead |
+| Design system | IBM Carbon Design System (`@carbon/styles`) | Tokens, type, motion and component anatomy from the system IBM ships its own products on |
+| Styling | Sass, compiled by Vite | Design tokens are generated from Carbon's theme maps rather than hand-written |
 
 ---
 
@@ -334,15 +371,45 @@ Full prerequisites and troubleshooting in [SETUP.md](SETUP.md).
 
 ```
 Eco-Trace/
-+-- index.html               Single app shell: 3-panel layout + settings modal
++-- index.html               App shell: UI shell header, 3-pane workbench, modals, icon sprite
 +-- src/
-|   +-- main.ts              App entry point + full UI wiring
+|   +-- main.ts              Entry point: analyzer + Bob + ADB + export, and state ownership
+|   +-- styles/              Design system, compiled from Carbon Sass
+|   |   +-- _tokens.scss     Carbon g100/g90/white token set -> CSS custom properties
+|   |   +-- _fonts.scss      IBM Plex @font-face (local faces)
+|   |   +-- _base.scss       Reset, focus, scrollbars, a11y affordances
+|   |   +-- _controls.scss   Buttons, fields, tags, tabs, selects, switches
+|   |   +-- _shell.scss      Shell frame, status bar, modals, toasts, onboarding
+|   |   +-- _navigator.scss  File tree and severity filters
+|   |   +-- _findings.scss   Data table, expandable rows, run log, sub-score meters
+|   |   +-- _inspector.scss  Overview / causal chain / fix panels
+|   |   +-- index.scss       Entry; load order matters
+|   |   +-- fonts/           IBM Plex woff2 (SIL OFL 1.1)
+|   +-- ui/                  View modules — one concern per file, no markup in main.ts
+|   |   +-- store.ts         Shared state + event bus
+|   |   +-- dom.ts           Element lookup, escaping, icon and code helpers
+|   |   +-- focus.ts         Focus trap, tablist, declarative keymap
+|   |   +-- navigator.ts     Project tree: grouping, severity, keyboard traversal
+|   |   +-- findingsTable.ts Data table: filter, sort, expand, rollup
+|   |   +-- inspector.ts     Single-finding inspector and chain rendering
+|   |   +-- remediation.ts   The 23 authored fixes
+|   |   +-- runLog.ts        Level-filtered, copyable run log
+|   |   +-- palette.ts       Command palette
+|   |   +-- splitters.ts     Persisted, keyboard-operable pane resizing
+|   |   +-- panes.ts         Pane-to-overlay behaviour at narrow widths
+|   |   +-- modals.ts        Settings and history modals
+|   |   +-- theme.ts         Carbon theme selection
+|   |   +-- toasts.ts        Notifications
+|   |   +-- catalog.ts       The 23-detector catalogue
+|   |   +-- format.ts        Path, number and date formatting
+|   |   +-- preview.ts       Dev-only browser harness (never in a release bundle)
+|   |   +-- report.html      Exported report template (IBM Plex embedded)
 |   +-- analyzer/static.ts   23-pattern static analysis engine
 |   +-- parser/dumpsys.ts    ADB output -> structured JSON
 |   +-- grader/grade.ts      Scoring engine + scan history storage
 |   +-- settings.ts          ADB path + API key persistence
-|   +-- ui/report.html       Standalone exportable HTML report
-|   +-- ui/styles.css        Dark theme design system
++-- tools/
+|   +-- embed-report-fonts.mjs   Re-embeds IBM Plex into the report template
 +-- src-tauri/
 |   +-- src/lib.rs           Rust commands: read_file, walk_dir
 |   +-- src/main.rs          Binary entry point

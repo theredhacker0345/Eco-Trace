@@ -13,10 +13,10 @@
     "windows": [
       {
         "title": "EcoTrace — Android Energy Intelligence",
-        "width": 1400,
+        "width": 1440,
         "height": 900,
-        "minWidth": 960,
-        "minHeight": 620,
+        "minWidth": 1024,
+        "minHeight": 680,
         "resizable": true,
         "fullscreen": false,
         "decorations": true

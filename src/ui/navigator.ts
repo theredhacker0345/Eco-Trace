@@ -95,7 +95,9 @@ function build(): void {
       dir,
       files: files.sort(
         (a, b) =>
-          severityRank(b.severity) - severityRank(a.severity) ||
+          // Most severe first: during triage the question is always "what is
+          // broken", not "what is alphabetically first".
+          severityRank(a.severity) - severityRank(b.severity) ||
           b.count - a.count ||
           a.name.localeCompare(b.name)
       ),

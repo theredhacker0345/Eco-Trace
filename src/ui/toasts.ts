@@ -56,7 +56,7 @@ export function notify(
   const toast = document.createElement("div");
   toast.className = `cx-toast cx-toast--${kind}`;
   toast.innerHTML = `
-    ${icon(ICONS[kind], "i--sm").replace('class="i i--sm"', 'class="i i--sm cx-toast__icon"')}
+    <svg class="cx-toast__icon" aria-hidden="true"><use href="#i-${ICONS[kind]}" /></svg>
     <div class="cx-toast__body">
       <div class="cx-toast__title">${esc(title)}</div>
       ${detail ? `<div class="cx-toast__detail">${esc(detail)}</div>` : ""}

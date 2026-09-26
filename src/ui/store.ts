@@ -121,3 +121,45 @@ export function countBySeverity(
   }
   return tally;
 }
+
+export type SortKey = "severity" | "pattern" | "file" | "category";
+
+const SEVERITY_RANK: Record<string, number> = { Critical: 0, High: 1, Medium: 2 };
+
+/**
+ * Sorts the canonical finding list in place.
+ *
+ * Sorting the array itself rather than a copy is deliberate: `selectedIndex`
+ * is an index into this array, and the inspector shows it to the user as a
+ * position. If the table sorted a derived copy instead, the row a user is
+ * looking at and the "4 / 11" in the inspector would disagree whenever the
+ * display order differed from the stored order — which is exactly the kind of
+ * small lie that makes a tool feel untrustworthy.
+ */
+export function sortFindings(key: SortKey, ascending: boolean): void {
+  const direction = ascending ? 1 : -1;
+  const project = (finding: Finding): string => finding.file;
+
+  state.findings.sort((a, b) => {
+    let delta = 0;
+    switch (key) {
+      case "severity":
+        delta =
+          (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9);
+        if (delta === 0) delta = a.patternId.localeCompare(b.patternId);
+        break;
+      case "pattern":
+        delta = a.patternName.localeCompare(b.patternName);
+        break;
+      case "category":
+        delta = a.category.localeCompare(b.category);
+        if (delta === 0) delta = a.patternId.localeCompare(b.patternId);
+        break;
+      case "file":
+        delta = project(a).localeCompare(project(b));
+        if (delta === 0) delta = a.line - b.line;
+        break;
+    }
+    return delta * direction;
+  });
+}

@@ -925,14 +925,13 @@
 // ===========================================================================
 // Light themes
 //
-// Carbon ships three additional themes. Because every surface, border and text
-// colour in this app resolves to a `--cds-*` custom property, switching theme
-// is a token swap — no component rule changes. Only the component fills that
-// Carbon itself defines per theme need an override.
+// Carbon's white and g90 themes ship their own component fills, because a
+// button that reads correctly on Gray 100 does not read correctly on white.
+// These are the only values that have to be restated per theme — every
+// universal colour role already follows the theme through _tokens.scss.
 // ===========================================================================
 
 [data-theme='g90'],
-[data-theme='g80'],
 [data-theme='white'] {
   --cx-btn-primary: #0f62fe;
   --cx-btn-primary-hover: #0353e9;

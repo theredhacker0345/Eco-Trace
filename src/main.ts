@@ -78,6 +78,7 @@ import {
   type Command as PaletteCommand,
 } from "./ui/palette.js";
 import { initSplitters, resetPanes } from "./ui/splitters.js";
+import { initPanes } from "./ui/panes.js";
 import { applyTheme, initTheme, nextTheme, THEME_LABELS } from "./ui/theme.js";
 import { initModals, openHistory, openSettings, closeSettings } from "./ui/modals.js";
 import {
@@ -92,6 +93,7 @@ import { relPath, plural } from "./ui/format.js";
 import {
   emit,
   selectedFinding,
+  sortFindings,
   state,
   subscribe,
   type DeviceState,
@@ -144,6 +146,7 @@ const localChains = new Map<string, ChainNode[]>();
 async function boot(): Promise<void> {
   initTheme();
   initSplitters();
+  initPanes();
   initStatusBar();
   initRunLog();
   initNavigator();
@@ -179,6 +182,27 @@ async function boot(): Promise<void> {
 
   syncConnectionIndicator();
 }
+
+/**
+ * Development convenience: when the app is served by Vite rather than launched
+ * by Tauri, there is no folder picker and no IPC, so the workbench would have
+ * nothing to show. In that case — and only in that case — index the bundled
+ * Java fixtures so the interface can be reviewed with real findings in it.
+ * The dynamic import keeps both the harness and the fixtures out of a release
+ * build.
+ */
+async function mountBrowserPreviewIfNeeded(): Promise<void> {
+  if (!import.meta.env.DEV) return;
+  const { isBrowserPreview, mountPreview } = await import("./ui/preview.js");
+  if (!isBrowserPreview()) return;
+  try {
+    await mountPreview();
+  } catch (err) {
+    log("system", `Browser preview unavailable: ${String(err)}`);
+  }
+}
+
+void mountBrowserPreviewIfNeeded();
 
 void boot();
 
@@ -378,6 +402,10 @@ async function loadProject(root: string): Promise<void> {
   emit("files", "findings", "grade", "selection");
   setStatusText(`${files.length} files indexed`);
 
+  // The palette lists project files, so its command set is rebuilt whenever
+  // the file list changes rather than only at start-up.
+  registerCommands();
+
   log(
     "success",
     `Indexed ${files.length} files (${kotlin} Kotlin, ${files.length - kotlin} Java).` +
@@ -418,6 +446,9 @@ async function runAnalysis(): Promise<void> {
 
     const local = analyzeProject(state.files);
     state.findings = [...local];
+    // The canonical order is severity-first, and it is maintained in the store
+    // so a row's index is its position everywhere it is shown.
+    sortFindings("severity", true);
     setProgressValue(0.35);
     log(
       "success",
@@ -978,6 +1009,7 @@ async function exportReport(): Promise<void> {
     const payload = {
       projectPath: state.projectPath ?? "Unknown",
       timestamp: Date.now(),
+      filesIndexed: state.files.length,
       grade: state.grade ?? calculateGrade(state.findings, 0),
       findings: state.findings.slice(0, 100).map((finding) => ({
         ...finding,
@@ -1057,6 +1089,13 @@ function renderOnboardingCatalog(): void {
 // Commands and keyboard
 // ---------------------------------------------------------------------------
 
+/**
+ * Publishes the command set.
+ *
+ * Called at start-up and again whenever the file list changes, because the
+ * palette doubles as a jump-to-file index and that index has to reflect the
+ * project currently open.
+ */
 function registerCommands(): void {
   const commands: PaletteCommand[] = [
     {
@@ -1301,10 +1340,9 @@ function wireGlobalEvents(): void {
     if (state.files.some((f) => f.path === abs)) revealFile(abs, false);
   });
 
-  // A Tauri window can be resized from the frame; the panes must not fight it.
-  window.addEventListener("beforeunload", () => {
-    log("system", "Session closed.");
-  });
+  document.addEventListener("ecotrace:files-changed", registerCommands);
+
+  log("system", "Session initialised.");
 }
 
 export type { LogLevel };

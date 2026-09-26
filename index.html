@@ -70,8 +70,8 @@
        ═════════════════════════════════════════════════════════════════════ -->
   <header id="titlebar" class="cx-shell__header" data-tauri-drag-region>
     <div class="cx-shell__header-left" data-tauri-drag-region>
-      <button id="btn-toggle-nav" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
-              title="Show navigator" aria-label="Show navigator" hidden>
+      <button id="btn-toggle-nav" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm cx-under-960"
+              title="Show navigator" aria-label="Show navigator" aria-expanded="false">
         <svg class="i"><use href="#i-folder" /></svg>
       </button>
 
@@ -121,6 +121,11 @@
       <button id="btn-export" class="cx-btn cx-btn--primary cx-btn--sm" disabled>
         <svg class="i"><use href="#i-download" /></svg>
         Export report
+      </button>
+
+      <button id="btn-toggle-inspector" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm cx-under-1280"
+              title="Show inspector" aria-label="Show inspector" aria-expanded="false">
+        <svg class="i"><use href="#i-bulb" /></svg>
       </button>
 
       <button id="btn-settings" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm"
@@ -301,11 +306,11 @@
             </caption>
             <colgroup>
               <col style="width: 40px" />
-              <col style="width: 116px" />
-              <col style="width: 92px" />
+              <col style="width: 104px" />
+              <col style="width: 72px" />
               <col />
-              <col style="width: 180px" />
-              <col style="width: 260px" />
+              <col style="width: 156px" />
+              <col style="width: 210px" />
             </colgroup>
             <thead>
               <tr>

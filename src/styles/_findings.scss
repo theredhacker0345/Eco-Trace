@@ -93,9 +93,14 @@
   height: 0;
 }
 
+// Toolbar children keep their intrinsic width; only the spacer absorbs slack.
+// Without this the selects shrink to a chevron and stop being readable.
+.cx-toolbar > * {
+  flex: none;
+}
+
 .cx-toolbar__search {
   width: 240px;
-  flex: none;
 }
 
 .cx-toolbar__spacer {
@@ -289,7 +294,7 @@
 .cx-cell-loc {
   display: flex;
   align-items: baseline;
-  gap: var(--cx-space-2xs);
+  gap: 0;
   min-width: 0;
   font-family: var(--cx-font-mono);
   font-size: 12px;
@@ -443,8 +448,8 @@
   display: flex;
   align-items: center;
   gap: var(--cx-space-lg);
-  min-height: var(--cx-panel-header-h);
-  padding: var(--cx-space-xs) var(--cx-space-lg);
+  min-height: 56px;
+  padding: var(--cx-space-sm) var(--cx-space-lg);
   border-top: 1px solid var(--cds-border-subtle-00);
   background: var(--cds-layer-01);
   flex: none;

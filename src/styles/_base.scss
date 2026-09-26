@@ -87,6 +87,14 @@ svg {
   flex: none;
 }
 
+// Any component that sets an explicit `display` would otherwise defeat the
+// user-agent rule for the `hidden` attribute, which is the mechanism the
+// application uses to toggle whole regions. Declaring it once, here, means
+// `hidden` always wins and never has to be re-implemented per component.
+[hidden] {
+  display: none !important;
+}
+
 ::selection {
   background: rgba(69, 137, 255, 0.4);
 }
@@ -194,10 +202,11 @@ svg {
 // ---------------------------------------------------------------------------
 
 // Skip link. The workbench is keyboard-driven, so a means of bypassing the
-// three panes is required, not optional.
+// three panes is required, not optional. Fixed rather than absolute so it
+// cannot be scrolled into view by any pane's scroll position.
 .skip-link {
-  position: absolute;
-  top: calc(var(--cx-space-2xs) * -4);
+  position: fixed;
+  top: calc(var(--cx-space-2xs) * -20);
   left: var(--cx-space-md);
   z-index: 400;
   padding: var(--cx-space-xs) var(--cx-space-md);

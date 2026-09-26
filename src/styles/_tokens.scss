@@ -40,7 +40,8 @@
   @return map.get(map.get(motion.$easings, $surface), $mode);
 }
 
-:root {
+:root,
+[data-theme='g100'] {
   // ── The complete Carbon g100 token set ────────────────────────────────
   // Emits --cds-background, --cds-layer-01, --cds-interactive,
   // --cds-support-error, --cds-syntax-keyword, … and `color-scheme: dark`.
@@ -155,6 +156,27 @@
     0 48px 96px rgba(0, 0, 0, 0.32);
   --cx-shadow-popover: 0 2px 6px rgba(0, 0, 0, 0.2),
     0 18px 48px rgba(0, 0, 0, 0.3);
+}
+
+// ---------------------------------------------------------------------------
+// The other Carbon themes
+//
+// Carbon ships three themes over one shared token set (white, g90, g100).
+// Because every rule in this stylesheet resolves to a `--cds-*` custom
+// property, selecting a theme is a re-emission of those properties on a
+// different selector — no component rule is re-declared, nothing is
+// re-rendered, and the whole application retones atomically.
+//
+// These blocks must stay *after* the g100 block above: they have the same
+// specificity as `:root`, so source order is what decides between them.
+// ---------------------------------------------------------------------------
+
+[data-theme='g90'] {
+  @include theme.theme(themes.$g90);
+}
+
+[data-theme='white'] {
+  @include theme.theme(themes.$white);
 }
 
 // ---------------------------------------------------------------------------

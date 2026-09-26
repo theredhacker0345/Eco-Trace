@@ -61,11 +61,45 @@ Or download a pre-built installer from the [Releases page](https://github.com/th
 
 ---
 
+## Reviewing the interface without building the app
+
+`npm run dev` starts Vite on <http://localhost:5173>. The Tauri IPC bridge is
+absent in a plain browser, so the folder picker and ADB commands cannot run —
+but a development-only harness detects that and indexes the repository's own
+Java fixtures instead, so the workbench can be reviewed with real findings
+produced by the real detector set.
+
+That harness is behind `import.meta.env.DEV` and a dynamic import, so it and
+the fixtures it reads are absent from a release bundle. The same command is
+therefore also the fastest way to check a UI change before paying for a full
+Rust build.
+
+---
+
+## Design system
+
+The interface is built on the **IBM Carbon Design System**
+(`@carbon/styles`, installed from npm). `src/styles/_tokens.scss` emits
+Carbon's g100 theme as CSS custom properties, so colours, type, spacing and
+motion are all generated from the design system rather than hand-picked.
+
+IBM Plex is bundled in `src/styles/fonts/` — the app must render identically
+with no network access. If you change which faces ship, regenerate the
+embedded copies inside the exported report:
+
+```bash
+npm run report:fonts
+```
+
+---
+
 ## Dependencies overview
 
 | Layer      | Technology        | Managed by                   |
 |------------|-------------------|------------------------------|
 | Frontend   | TypeScript + Vite | `npm install`                |
+| Styling    | Sass + Carbon     | `npm install`                |
+| Typeface   | IBM Plex (OFL)    | Bundled in `src/styles/fonts`|
 | UI runtime | Tauri v2          | `npm install`                |
 | Backend    | Rust              | `cargo` (automatic)          |
 | Packaging  | NSIS installer    | Tauri CLI (automatic)        |
