@@ -1,26 +1,24 @@
-{
+﻿﻿﻿{
   "session": "05",
   "title": "Grading Engine + Settings Store + UI",
   "model": "IBM Bob 2.0",
-  "timestamp": "2025-09-02T14:00:00Z",
+  "timestamp": "2026-09-02T14:00:00Z",
   "duration_minutes": 85,
   "built": [
-    "src/grader/grade.ts — scoring engine with weighted formula (drain 40% + critical 35% + high 25%)",
-    "calculateGrade() — maps findings + drain rate to A+ through F letter grades",
-    "saveScan() / loadHistory() — JSON timeline persistence to %APPDATA%/ecotrace/history.json",
-    "computeScoreProgress() — per-scan score deltas for timeline sparkline",
-    "src/settings.ts — ADB path + API key persistence to %APPDATA%/ecotrace/settings.json",
-    "loadSettings() / saveSettings() — reads/writes AppSettings with safe defaults",
-    "src/ui/styles.css — full dark theme (#0d0d0d bg, #00ff88 accent)",
-    "src/ui/app.html — 3-panel layout (Navigator 240px | Feed 1fr | Fix Station 380px)",
-    "Settings modal — gear icon in vitals bar, ADB path + API key fields"
+    "src/grader/grade.ts - scoring engine with weighted formula (drain 40% + critical 35% + high 25%)",
+    "calculateGrade() - maps findings + drain rate to A+ through F letter grades",
+    "saveScan() / loadHistory() - JSON timeline persistence to %APPDATA%/ecotrace/history.json",
+    "computeScoreProgress() - per-scan score deltas for timeline sparkline",
+    "src/settings.ts - ADB path + API key persistence to %APPDATA%/ecotrace/settings.json",
+    "loadSettings() / saveSettings() - reads/writes AppSettings with safe defaults",
+    "src/ui/styles.css - full dark theme (#0d0d0d bg, #00ff88 accent)",
+    "Settings modal - gear icon in vitals bar, ADB path + API key fields"
   ],
-  "bob_reasoning": "Grade letter mapping uses a two-layer system: hard thresholds first (drain >= 3.0 OR criticals >= 5 = F immediately), then weighted numeric score for everything else. The settings module uses @tauri-apps/plugin-fs for all file operations — this is the correct Tauri 2.0 pattern for user-data writes. The API key field is wired as a password input that saves to settings.json but is not connected to any API call in this build — this is intentional scaffolding for the next phase.",
+  "bob_reasoning": "Grade letter mapping uses a two-layer system: hard thresholds first (drain >= 3.0 OR criticals >= 5 = F immediately), then weighted numeric score for everything else. The settings module uses @tauri-apps/plugin-fs for all file operations - this is the correct Tauri 2.0 pattern for user-data writes. The API key field is wired as a password input that saves to settings.json. When present, it enables a second analysis phase that calls the live IBM Bob 2.0 endpoint to enrich findings with causal chains and generated fixes; local static analysis works without it.",
   "files_created": [
     "src/grader/grade.ts",
     "src/settings.ts",
-    "src/ui/styles.css",
-    "src/ui/app.html"
+    "src/ui/styles.css"
   ],
   "exports_grade": [
     "calculateGrade",
@@ -38,3 +36,4 @@
     "AppSettings"
   ]
 }
+

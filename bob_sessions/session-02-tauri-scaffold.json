@@ -1,22 +1,22 @@
-{
+﻿﻿﻿{
   "session": "02",
   "title": "Tauri 2.0 Windows Project Scaffold",
   "model": "IBM Bob 2.0",
-  "timestamp": "2025-09-01T10:30:00Z",
+  "timestamp": "2026-09-01T10:30:00Z",
   "duration_minutes": 38,
   "built": [
     "package.json with exact Tauri 2.0 plugin versions (api@2.11.1, plugin-fs@2.5.2, plugin-shell@2.3.6, plugin-dialog@2.7.3)",
-    "tsconfig.json — strict ESNext config",
-    "vite.config.ts — Vite 5 + Tauri dev server config",
-    "index.html — frontend entry point",
-    "src-tauri/Cargo.toml — tauri 2.0, plugin-fs, plugin-shell, plugin-dialog, walkdir",
-    "src-tauri/tauri.conf.json — Tauri 2.0 schema (app.identifier, app.windows 1400x900)",
-    "src-tauri/build.rs — standard build script",
-    "src-tauri/src/lib.rs — read_file + walk_dir commands + plugin registration",
-    "src-tauri/src/main.rs — binary entry calling lib.rs run()",
-    "src-tauri/capabilities/default.json — correct Tauri 2.0 permission names",
-    ".cargo/config.toml — CARGO_TARGET_DIR fix for windres space-in-path bug",
-    "src-tauri/icons/ — full icon set via tauri icon command"
+    "tsconfig.json - strict ESNext config",
+    "vite.config.ts - Vite 5 + Tauri dev server config",
+    "index.html - frontend entry point",
+    "src-tauri/Cargo.toml - tauri 2.0, plugin-fs, plugin-shell, plugin-dialog, walkdir",
+    "src-tauri/tauri.conf.json - Tauri 2.0 schema (app.identifier, app.windows 1400x900)",
+    "src-tauri/build.rs - standard build script",
+    "src-tauri/src/lib.rs - read_file + walk_dir commands + plugin registration",
+    "src-tauri/src/main.rs - binary entry calling lib.rs run()",
+    "src-tauri/capabilities/default.json - correct Tauri 2.0 permission names",
+    ".cargo/config.toml - CARGO_TARGET_DIR fix for windres space-in-path bug",
+    "src-tauri/icons/ - full icon set via tauri icon command"
   ],
   "bob_reasoning": "First build attempt failed: MSVC linker not installed. Switched to MinGW GNU toolchain (already present at C:/ProgramData/mingw64). Second attempt failed: windres fails when build path contains spaces ('eco trace'). Fixed by setting CARGO_TARGET_DIR=C:/ecotrace_target in .cargo/config.toml. Third attempt: capabilities had wrong permission names (fs:allow-create-dir should be fs:allow-mkdir, path:allow-app-data-dir should be core:path:allow-resolve-directory). Fixed by reading the full permission list from the Tauri build error output. Final build succeeded: ecotrace.exe produced at C:/ecotrace_target/release/ecotrace.exe.",
   "files_created": [
@@ -34,5 +34,6 @@
     "src/main.ts",
     ".gitignore"
   ],
-  "build_result": "SUCCESS — ecotrace.exe compiled at C:/ecotrace_target/release/ecotrace.exe (MSI bundle skipped — WiX download not needed for development)"
+  "build_result": "SUCCESS - ecotrace.exe compiled at C:/ecotrace_target/release/ecotrace.exe (MSI bundle skipped - WiX download not needed for development)"
 }
+

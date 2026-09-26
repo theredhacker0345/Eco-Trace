@@ -17,9 +17,15 @@ a **causal chain** backwards through the call graph (up to 6 hops) to identify
 the architectural root cause. It then generates a grade (A+ → F) and
 concrete fix suggestions.
 
+Most detectors use a **single combined regex** that happens to match both Java and
+Kotlin syntax, because the Android API surface they look for is identical in both
+languages. Only a handful of detectors that key off *class declaration* syntax add a
+separate Kotlin alternative: **W03, W04, W05, N05, A01, A02, A03** (Java `extends Base`
+vs Kotlin `: Base()`). Do not assume there are two full regex variants per pattern.
+
 **Stack:** Tauri 2.0 (Rust backend) + TypeScript frontend.  
 **Key exports from `src/analyzer/static.ts`:**
-- `analyzeProject(files: FileContent[]): Finding[]`
+- `analyzeProject(files: FileContent[]): Finding[]` — runs all 23 detectors
 - `buildCallGraph(files: FileContent[]): CallGraph`
 - `traceCallChain(finding: Finding, callGraph: CallGraph, maxHops?: number): ChainNode[]`
 

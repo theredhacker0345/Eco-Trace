@@ -1,19 +1,19 @@
-{
+﻿﻿﻿{
   "session": "04",
   "title": "23-Pattern Static Analysis Engine",
   "model": "IBM Bob 2.0",
-  "timestamp": "2025-09-02T09:00:00Z",
+  "timestamp": "2026-09-02T09:00:00Z",
   "duration_minutes": 110,
   "built": [
-    "src/analyzer/static.ts — full 23-pattern analyzer",
+    "src/analyzer/static.ts - full 23-pattern analyzer",
     "23 pattern detectors: W01-W06 (Wakefulness), N01-N06 (Network), L01-L05 (Location/Sensors), A01-A06 (Lifecycle/Architecture)",
-    "Dual-language support: Java + Kotlin regex variants per pattern",
-    "buildCallGraph() — method definition + call site adjacency map",
-    "analyzeProject() — orchestrator running all 23 detectors",
-    "traceCallChain() — backwards walk up to 6 hops with cycle detection",
+    "Dual-language support: most patterns use a single combined regex; only class-declaration-based detectors (W03, W04, W05, N05, A01, A02, A03) have Kotlin-specific variants",
+    "buildCallGraph() - method definition + call site adjacency map",
+    "analyzeProject() - orchestrator running all 23 detectors",
+    "traceCallChain() - backwards walk up to 6 hops with cycle detection",
     "TypeScript interfaces: FileContent, Finding, CallGraph, CallEdge, ChainNode"
   ],
-  "bob_reasoning": "The 23 patterns span 4 categories with varying detection complexity. Simplest patterns (N02, N03 — missing timeouts) need only positive detection of OkHttpClient construction without timeout calls. Hardest patterns (W06 nested wakelocks, A05 heavy onDraw) require context around the detection site — W06 looks for acquire() twice in the same class, A05 looks for allocations inside the onDraw method body. The call graph builder uses a two-pass approach: first pass collects all method definitions with their file+line, second pass collects call sites. traceCallChain walks backwards using the call graph to find the root cause entry point (lifecycle method).",
+  "bob_reasoning": "The 23 patterns span 4 categories with varying detection complexity. Simplest patterns (N02, N03 - missing timeouts) need only positive detection of OkHttpClient construction without timeout calls. Hardest patterns (W06 nested wakelocks, A05 heavy onDraw) require context around the detection site - W06 looks for acquire() twice in the same class, A05 looks for allocations inside the onDraw method body. The call graph builder uses a two-pass approach: first pass collects all method definitions with their file+line, second pass collects call sites. traceCallChain walks backwards using the call graph to find the root cause entry point (lifecycle method).",
   "files_created": ["src/analyzer/static.ts"],
   "patterns_covered": 23,
   "languages_supported": ["java", "kotlin"],
@@ -29,3 +29,4 @@
     "Category"
   ]
 }
+

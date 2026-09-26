@@ -11,16 +11,20 @@
 - Fully compilable with `npm install && cargo tauri build` on Windows
 - 23-pattern static analyzer for Java and Kotlin source files
 - Full `dumpsys batterystats` parser (all sections)
-- Grading engine + local JSON scan timeline (`%APPDATA%\ecotrace\history.json`)
+- Grading engine + local JSON scan-history persistence (`%APPDATA%\ecotrace\history.json`; the timeline view is not yet surfaced in the UI — see Sub-Task 5)
 - 3-panel dark-theme UI (Project Navigator, Intelligence Feed, Fix Station)
-- **Settings panel with ADB path field and optional API key field** (for future Bob API integration)
+- **Settings panel with ADB path field and optional API key field** (the key enables the IBM Bob 2.0 enhancement layer — local static analysis does not require it)
 - `.bob/rules-agent/energy.md` with detection rules for all 23 patterns
 - `bob_sessions/` directory scaffolded with placeholder session files
 
 **Non-goals for this plan:**
-- Live API call in the hackathon build (API key field is wired to settings storage only; actual API call is stubbed)
-- Cross-platform builds
+- macOS / Linux builds
 - Unit test suite
+
+**Note on the Bob API:** the shipped build *does* call the live IBM Bob 2.0 endpoint
+(`https://api.bob.ibm.com/v2/chat/completions`) as an optional second analysis phase.
+The API key is an enhancement, not a prerequisite: local static analysis, grading, call
+graph tracing, and report export all work with no key configured.
 
 **Key decisions — ALL RESOLVED:**
 - All files in `Eco-Trace/` (no nested subfolder)
@@ -28,10 +32,10 @@
 - Static analyzer: regex-based (no AST library), covers Java + Kotlin for all 23 patterns
 - Causal chain tracing: data structure + UI only; Bob (the agent) authors the chain text during a session
 - dumpsys parser: full raw output, extracts 6 sections (power use, per-UID, wakelock history, network, Doze, CPU wakeups)
-- **Rust side: 3 commands (`read_file`, `walk_dir`) + `tauri-plugin-shell` for ADB execution** (NOT `std::process::Command` — plugin-shell is the correct Tauri 2.0 approach and handles sandboxing)
+- **Rust side: 2 commands (`read_file`, `walk_dir`) + `tauri-plugin-shell` for ADB execution** (NOT `std::process::Command` — plugin-shell is the correct Tauri 2.0 approach and handles sandboxing)
 - **ADB path**: user-configurable via Settings panel (defaults to `adb` in PATH; overridable to full path like `C:\platform-tools\adb.exe`)
 - **FS for history.json**: `appDataDir()` from `@tauri-apps/api/path` + `@tauri-apps/plugin-fs` for write operations
-- **API key**: stored in `%APPDATA%\ecotrace\settings.json` alongside ADB path preference; displayed in Settings panel as a password field
+- **API key**: stored in `%APPDATA%\ecotrace\settings.json` alongside ADB path preference; displayed in Settings panel as a password field; **optional** — the local 23-pattern analyzer works without it. When present, it enables a second analysis phase that calls the live IBM Bob 2.0 endpoint to enrich findings with causal chains and generated fixes.
 - Intelligence Feed: DOM-append model (no reactive framework — acceptable for hackathon scale)
 - Call graph depth: 6 hops max with visited-set cycle detection
 
@@ -39,7 +43,7 @@
 
 ## Sub-Task 1 — Tauri 2.0 Project Scaffold (Windows)
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Establish the buildable Windows project skeleton — all config files, dependency manifests, Tauri 2.0 capabilities, and the Rust `main.rs` with the correct plugin-based commands. This must compile cleanly before any TypeScript logic is added.
 
@@ -74,7 +78,7 @@
 
 ## Sub-Task 2 — `.bob/rules-agent/energy.md`
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Write Bob's custom detection rules file — the machine-readable spec that defines exactly how Bob should recognize each of the 23 energy anti-patterns when reading Android source code. This file is the cognitive backbone of EcoTrace's static analysis capability.
 
@@ -101,7 +105,7 @@
 
 ## Sub-Task 3 — `dumpsys.ts` ADB Output Parser
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Build the TypeScript module that transforms raw `adb shell dumpsys batterystats` output into a typed, structured JSON object. This is the foundation for dynamic profiling — every other module that consumes ADB data depends on this parser's output shape.
 
@@ -134,13 +138,13 @@
 
 ## Sub-Task 4 — `static.ts` 23-Pattern Analyzer
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Build the core static analysis engine — the TypeScript module that walks an Android project's source tree, applies all 23 pattern detectors across every `.java` and `.kt` file, and returns a structured findings list with file path, line number, pattern ID, severity, and the raw code snippet that triggered detection.
 
 **Expected Outcomes:**
 - `src/analyzer/static.ts` exports `analyzeProject(files: FileContent[]): Finding[]`
-- All 23 patterns have working detectors for both Java and Kotlin
+- All 23 patterns have working detectors that handle both Java and Kotlin source files
 - Each `Finding` includes: `patternId`, `severity`, `file`, `line`, `snippet`, `category`, `description`, `causalChainHint`
 - `buildCallGraph(files: FileContent[]): CallGraph` builds a simple method-call adjacency map for use by the UI's causal chain display
 - Pattern detection is pure regex — no external parser dependency
@@ -149,10 +153,10 @@
 1. Create `Eco-Trace/src/analyzer/static.ts`
 2. Define TypeScript interfaces: `FileContent`, `Finding`, `CallGraph`, `CallEdge`
 3. Implement `Severity` and `Category` enums matching the 23 patterns
-4. Implement Wakefulness detectors W01–W06 (Java + Kotlin regex variants for each)
-5. Implement Network detectors N01–N06 (Java + Kotlin regex variants for each)
-6. Implement Location & Sensor detectors L01–L05 (Java + Kotlin regex variants for each)
-7. Implement Lifecycle & Architecture detectors A01–A06 (Java + Kotlin regex variants for each)
+4. Implement Wakefulness detectors W01–W06 (one combined regex each; W03/W04/W05 also match the Kotlin `: Base()` declaration form)
+5. Implement Network detectors N01–N06 (one combined regex each; N05 also matches the Kotlin `: Base()` declaration form)
+6. Implement Location & Sensor detectors L01–L05 (one combined regex each)
+7. Implement Lifecycle & Architecture detectors A01–A06 (one combined regex each; A01/A02/A03 also match the Kotlin `: Base()` declaration form)
 8. Implement `buildCallGraph()` — extract method definitions and call sites, build adjacency map
 9. Implement `analyzeProject()` — orchestrator that runs all detectors over all files
 10. Implement `traceCallChain(finding: Finding, callGraph: CallGraph): ChainNode[]` — walks backwards from a finding's file+method to find callers, up to 6 hops
@@ -162,6 +166,7 @@
 - Pattern IDs and detection signals defined in `.bob/rules-agent/energy.md` (Sub-Task 2)
 - `walk_dir` Tauri command returns file paths; `read_file` returns file contents
 - Kotlin syntax differs from Java: `acquire()` vs `acquire()` same, but `fun` vs `void`, `val`/`var` vs type declarations
+- Only class-declaration-based detectors need a Kotlin alternative (`extends X` vs `: X()`): W03, W04, W05, N05, A01, A02, A03. Everything else is language-agnostic.
 - Call graph: look for `methodName(` call sites and `fun methodName` / `void methodName` definitions
 - causalChainHint: a string like `"trace back from acquire() caller"` for Bob to use during session
 
@@ -169,7 +174,7 @@
 
 ## Sub-Task 4b — `settings.ts` Settings Store (ADB Path + API Key)
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Build the settings persistence module. This gives the user a place to configure their ADB executable path (for Windows installs where ADB isn't in PATH) and an API key field for future Bob API integration. Settings stored in `%APPDATA%\ecotrace\settings.json`.
 
@@ -199,7 +204,7 @@
 
 ## Sub-Task 5 — `grade.ts` Scoring Engine + Timeline Storage
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Build the grading engine that takes a combined finding list + delta data and produces an energy grade (A+ to F), plus the local JSON persistence layer that stores every scan so the timeline view can show score progression over time.
 
@@ -210,6 +215,12 @@
 - `saveScan(scan: ScanRecord): void` writes to `%APPDATA%\ecotrace\history.json`
 - `loadHistory(): ScanRecord[]` reads and returns all past scans sorted newest-first
 - Timeline delta: `computeScoreProgress(history: ScanRecord[]): ProgressPoint[]`
+
+**Current implementation status:** the scoring engine and all three persistence
+helpers are implemented. `saveScan()` is called after each ADB profiling session, but
+`loadHistory()` and `computeScoreProgress()` have **no callers** — no timeline view is
+rendered in the UI, and the report export injects `history: []`, so the timeline
+section in `src/ui/report.html` never appears in practice. Surfacing it is future work.
 
 **Todo List:**
 1. Create `Eco-Trace/src/grader/grade.ts`
@@ -232,15 +243,15 @@
 
 ---
 
-## Sub-Task 6 — UI: `styles.css` + `app.html` (3-Panel Layout + Settings Modal)
+## Sub-Task 6 — UI: `index.html` + `styles.css` (3-Panel Layout + Settings Modal)
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Build the complete dark-theme UI — CSS design system, 3-panel layout, always-visible vitals bar, and the Settings modal (gear icon → ADB path + API key). This is what judges see and interact with.
 
 **Expected Outcomes:**
 - `src/ui/styles.css`: background `#0d0d0d`, accent `#00ff88`, severity colors
-- `src/ui/app.html`: 3-panel layout at 1400×900, Settings modal, all IDs wired
+- `index.html`: the single app shell — 3-panel layout, landing overlay, Settings modal, all IDs wired, loading `/src/main.ts`
 - Project Navigator: file tree, severity dots, active state
 - Intelligence Feed: DOM-append text stream with timestamps
 - Fix Station: finding card, causal chain tree, code diff block, copy button
@@ -256,7 +267,7 @@
 6. Implement `.vitals-bar` styles — fixed bottom bar, grade badge colors, gear icon button
 7. Implement `.grade-badge` color variants (A+=`#00ff88`, A=`#00cc66`, B=`#88ff00`, C=`#ffcc00`, D=`#ff8800`, F=`#ff2200`)
 8. Implement `.settings-modal` styles — centered overlay, dark card, form inputs dark theme
-9. Create `Eco-Trace/src/ui/app.html` — 3-panel structure + Settings modal `<div>` with all IDs
+9. Create `Eco-Trace/index.html` — the single app shell: 3-panel structure + Settings modal `<div>` with all IDs (there is no separate `src/ui/app.html`; it was dead code and has been removed)
 10. Wire folder picker (`@tauri-apps/plugin-dialog`) → `walk_dir` → navigator
 11. Wire Analyze button → analyzer → stream findings to Intelligence Feed
 12. Wire finding click → Fix Station population with causal chain
@@ -266,22 +277,22 @@
 - `@tauri-apps/plugin-dialog` needed for folder picker — add to package.json + Cargo.toml + capabilities
 - Intelligence Feed: append `<div class="feed-entry">` nodes — no full re-render
 - Settings modal: reads `AppSettings` from Sub-Task 4b on open
-- API key field: display note below field: `"Stored locally. API integration in next release."`
+- API key field: display note below field: `"Stored locally. Optional — local static analysis works without it; a key enables IBM Bob 2.0 causal chain analysis."`
 
 ---
 
 ## Sub-Task 7 — `report.html` Exportable Standalone Report
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Build the standalone report HTML that can be opened in any browser without the Tauri shell — a self-contained single-file report that packages all findings, the causal chains, grade, and timeline into a shareable artifact.
 
 **Expected Outcomes:**
 - `src/ui/report.html` is a single self-contained HTML file (all CSS inline or in `<style>`)
 - Accepts scan data injected as a JSON blob in a `<script id="scan-data">` tag
-- Renders: grade badge, drain rate, summary table, per-finding cards with causal chain, timeline sparkline
+- Renders: grade badge, drain rate, summary table, per-finding cards with causal chain, timeline table (rendered only when 2+ history records are injected; the current export passes `history: []`, so the timeline section is absent in practice)
 - No external network requests — fully offline-capable
-- Export triggered from `app.html` via a "Export Report" button that writes the file via Tauri's `writeTextFile`
+- Export triggered from the app shell (`index.html` / `src/main.ts`) via a "Export Report" button that writes the file via Tauri's `writeTextFile`
 
 **Todo List:**
 1. Create `Eco-Trace/src/ui/report.html`
@@ -290,9 +301,9 @@
 4. Implement summary section: drain rate, critical/high/medium counts, grade breakdown
 5. Implement findings list: collapsible cards, one per finding, sorted Critical first
 6. Implement causal chain display per finding: same tree structure as Fix Station
-7. Implement timeline section: simple table of past scans with score trend arrows
+7. Implement timeline section: simple table of past scans with score trend arrows (template exists; not reachable because the injected `history` array is always empty — see Sub-Task 5)
 8. Implement data injection: `<script id="scan-data" type="application/json">` slot + `JSON.parse` bootstrap
-9. Add "Export Report" button handler in `app.html`/`main.ts` that generates and writes report
+9. Add "Export Report" button handler in `index.html`/`main.ts` that generates and writes report
 
 **Relevant Context:**
 - `GradeResult` and `ScanRecord` types from Sub-Task 5
@@ -303,7 +314,7 @@
 
 ## Sub-Task 8 — `bob_sessions/` + `assets/` Scaffolding
 
-**Status:** [ ] pending
+**Status:** [x] done
 
 **Intent:** Create the session export directory with placeholder JSON files matching the README's session table, plus an assets directory. These demonstrate to hackathon judges that the Bob-session-driven development process was followed and give the repo a complete, professional appearance.
 
@@ -320,7 +331,7 @@
 4. Create `Eco-Trace/.gitignore` with standard Tauri + Node ignores
 
 **Relevant Context:**
-- Session titles from README.md lines 319–327
+- Session titles from the "Bob Sessions" table in `README.md`
 - Session files are human-readable evidence of the build process, not machine-consumed
 
 ---
@@ -334,7 +345,7 @@ Sub-Task 3   (dumpsys.ts parser)              ← after ST1; defines DumpsysResu
 Sub-Task 4   (static.ts analyzer)             ← after ST2 rules; defines Finding + CallGraph
 Sub-Task 4b  (settings.ts)                    ← after ST1; defines AppSettings; independent of ST3+ST4
 Sub-Task 5   (grade.ts)                       ← after ST3 + ST4; needs Finding + DumpsysDelta
-Sub-Task 6   (UI: app.html + styles + wiring) ← after ST3+ST4+ST4b+ST5; integrates everything
+Sub-Task 6   (UI: index.html + styles + wiring) ← after ST3+ST4+ST4b+ST5; integrates everything
 Sub-Task 7   (report.html)                    ← after ST5 types + ST6 export button
 Sub-Task 8   (bob_sessions + assets)          ← independent; build any time
 ```
@@ -353,7 +364,7 @@ Sub-Task 8   (bob_sessions + assets)          ← independent; build any time
 | AD-6 | Call graph depth | 6 hops max with visited-set cycle detection |
 | AD-7 | Static analysis | Pure regex — no AST library |
 | AD-8 | ADB subprocess | `tauri-plugin-shell` (NOT `std::process::Command`) |
-| AD-9 | API key | Stored in `settings.json`; shown as password field in Settings modal; no API call in this build |
+| AD-9 | API key | Optional. Stored in `settings.json`; shown as a password field in the Settings modal. Local static analysis (23 detectors), call graph tracing, grading and report export all work with no key. When a key is set, a second analysis phase calls the live IBM Bob 2.0 endpoint (`https://api.bob.ibm.com/v2/chat/completions`) to enrich findings with causal chains and generated fixes. |
 | AD-10 | Platform | Windows 10/11 only |
 
 ---
@@ -368,7 +379,7 @@ Sub-Task 8   (bob_sessions + assets)          ← independent; build any time
 | 4 | static.ts analyzer (23 patterns × 2 langs + call graph) | Very High | ~200 |
 | 4b | settings.ts (ADB path + API key store) | Low-Medium | ~50 |
 | 5 | grade.ts (scoring + history storage) | Medium | ~70 |
-| 6 | UI: styles.css + app.html + wiring + Settings modal | High | ~160 |
+| 6 | UI: index.html + styles.css + wiring + Settings modal | High | ~160 |
 | 7 | report.html standalone export | Medium | ~80 |
 | 8 | bob_sessions + assets + .gitignore | Low | ~30 |
 | | **Total** | | **~880** |

@@ -198,9 +198,17 @@ val response = client.newBuilder()
 
 ---
 
-### 5. Energy Score Timeline
+### 5. Scan History Persistence
 
-Every scan is saved locally. Track your energy grade as you apply fixes and see exactly how each architectural change moves the needle.
+Every ADB profiling session is appended to a local scan history
+(`%APPDATA%\ecotrace\history.json`) via `saveScan()` in `src/grader/grade.ts`, and
+`loadHistory()` / `computeScoreProgress()` are implemented to read it back and compute
+per-scan score deltas.
+
+**Current status:** the persistence layer exists and is written, but the timeline view
+is **not yet surfaced in the UI** — no timeline chart is rendered anywhere, and the
+exported report payload hardcodes an empty `history` array, so no score-over-time view
+is available yet. The storage layer is in place for that view.
 
 ---
 
@@ -237,6 +245,12 @@ We ran EcoTrace against [Signal Android](https://github.com/signalapp/Signal-And
 
 *Real findings on production code -- not synthetic examples.*
 
+> **How to read this table:** these figures come from a single **manual** run, most of them
+> recorded in [`bob_sessions/session-07-fix-engine.json`](bob_sessions/session-07-fix-engine.json)
+> (the 43-second timing is not recorded there). No automated test or benchmark script in
+> this repo reproduces them, so treat them as an illustrative record rather than a
+> reproducible measurement.
+
 ---
 
 ## Architecture
@@ -254,7 +268,7 @@ We ran EcoTrace against [Signal Android](https://github.com/signalapp/Signal-And
 |  highlighted |                  |  Copy to clipboard|
 +--------------+------------------+-------------------+
 |        Energy Vitals Bar (always visible)           |
-|   Drain Rate  |  Grade  |  Critical Count  |  Trend |
+|   Grade  |  Drain Rate  |  Critical Count  |  High Count  |
 +-----------------------------------------------------+
         |                          |
         v                          v
@@ -272,11 +286,11 @@ We ran EcoTrace against [Signal Android](https://github.com/signalapp/Signal-And
         |                          |
         +------------+-------------+
                      v
-             +--------------+
-             |  Grader +    |
-             |  Timeline DB |
-             |  (local JSON)|
-             +--------------+
+              +--------------+
+              |  Grader +    |
+              |  Scan History|
+              |  (local JSON)|
+              +--------------+
 ```
 
 ---
@@ -320,13 +334,13 @@ Full prerequisites and troubleshooting in [SETUP.md](SETUP.md).
 
 ```
 Eco-Trace/
++-- index.html               Single app shell: 3-panel layout + settings modal
 +-- src/
 |   +-- main.ts              App entry point + full UI wiring
 |   +-- analyzer/static.ts   23-pattern static analysis engine
 |   +-- parser/dumpsys.ts    ADB output -> structured JSON
-|   +-- grader/grade.ts      Scoring engine + timeline storage
+|   +-- grader/grade.ts      Scoring engine + scan history storage
 |   +-- settings.ts          ADB path + API key persistence
-|   +-- ui/app.html          Main three-panel layout
 |   +-- ui/report.html       Standalone exportable HTML report
 |   +-- ui/styles.css        Dark theme design system
 +-- src-tauri/
@@ -338,7 +352,7 @@ Eco-Trace/
 |   +-- rules-agent/energy.md  Bob's 23-pattern detection rules
 +-- bob_sessions/            IBM Bob 2.0 session exports (7 sessions)
 +-- docs/                    Architecture plan, testing guide
-+-- assets/demo.gif          Demo recording
++-- assets/                  Demo assets (demo.gif not yet committed — see assets/README.md)
 +-- .github/workflows/       CI: build, typecheck, release
 +-- README.md
 +-- SETUP.md
@@ -350,15 +364,15 @@ Eco-Trace/
 
 All 7 IBM Bob 2.0 session exports live in [`/bob_sessions/`](bob_sessions/). They show exactly how Bob reasoned through every stage of the build.
 
-| Session | What Bob Built |
-|---|---|
-| `session-01-architecture.json` | Full project plan, 10 architectural decisions |
-| `session-02-tauri-scaffold.json` | Tauri 2.0 shell + Rust bridge |
-| `session-03-dumpsys-parser.json` | ADB output parser (7 interfaces, 8 parsers) |
-| `session-04-static-analyzer.json` | 23-pattern engine + call graph builder |
-| `session-05-grader-ui.json` | Grading engine + three-panel UI |
-| `session-06-call-chain.json` | Causal chain tracing logic |
-| `session-07-fix-engine.json` | Bob-generated code fix system |
+| Session | Title (from the session export) | What Bob Built |
+|---|---|---|
+| `session-01-architecture.json` | Full Project Architecture & Planning | Full project plan, 10 architectural decisions |
+| `session-02-tauri-scaffold.json` | Tauri 2.0 Windows Project Scaffold | Tauri 2.0 shell + Rust bridge |
+| `session-03-dumpsys-parser.json` | ADB dumpsys batterystats Parser | ADB output parser (7 interfaces, 8 parsers) |
+| `session-04-static-analyzer.json` | 23-Pattern Static Analysis Engine | 23-pattern engine + call graph builder |
+| `session-05-grader-ui.json` | Grading Engine + Settings Store + UI | Grading engine + settings store + three-panel UI |
+| `session-06-call-chain.json` | Causal Chain Tracing + Fix Station UI | Causal chain tracing + Fix Station UI |
+| `session-07-fix-engine.json` | Fix Generation + Final Integration | Bob-generated code fix system |
 
 ---
 
@@ -378,7 +392,7 @@ All 7 IBM Bob 2.0 session exports live in [`/bob_sessions/`](bob_sessions/). The
 
 Most hackathon submissions use Bob as a smarter autocomplete. EcoTrace uses Bob for what **no other tool -- AI or otherwise -- can do**: simultaneous multi-file causal reasoning across a full Android codebase.
 
-The call chain tracer is a publishable research contribution. The fix generator makes it immediately useful. The ADB integration makes it complete. And the grading timeline turns a one-shot analysis into a continuous improvement loop.
+The call chain tracer is a publishable research contribution. The fix generator makes it immediately useful. The ADB integration makes it complete. And the scan-history store (already persisting every profiled scan) is the foundation for turning a one-shot analysis into a continuous improvement loop.
 
 **This is not a demo. This is a tool Android developers would actually install.**
 

@@ -4,6 +4,11 @@ This directory contains static assets for EcoTrace.
 
 ## demo.gif
 
+> **Status: missing.** `assets/demo.gif` does not exist in this repository yet — this
+> directory currently contains only this `README.md`. Until a recording is added, the
+> `![EcoTrace Demo](assets/demo.gif)` image in the top-level `README.md` renders as a
+> broken image. Recording the demo below (or removing the image line) fixes it.
+
 Record a short demo of EcoTrace analyzing an Android project and place it here as `demo.gif`.
 
 The README references it as:

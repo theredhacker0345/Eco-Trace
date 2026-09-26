@@ -41,15 +41,23 @@ adb version
 # Expected: Android Debug Bridge version 1.x.x
 ```
 
-### Windows-specific: use the MinGW GNU toolchain
+### Windows-specific: use the MSVC toolchain
 
-EcoTrace must be compiled with the **MinGW GNU toolchain** on Windows (not MSVC). If you haven't set it up yet:
+EcoTrace is compiled with the **MSVC toolchain** on Windows. This is the default
+for `rustup` on Windows and is pinned explicitly in two places:
+
+- `.cargo/config.toml` sets `[build] target = "x86_64-pc-windows-msvc"`
+- `.github/workflows/build-windows.yml` and `.github/workflows/release.yml` both pin `toolchain: stable-x86_64-pc-windows-msvc`
+
+If your default toolchain is not MSVC, switch back to it:
 
 ```bash
-rustup default stable-x86_64-pc-windows-gnu
+rustup default stable-x86_64-pc-windows-msvc
 ```
 
-> **Why?** The MSVC linker causes `windres` path-with-spaces errors. The GNU toolchain avoids this entirely. See [Known Issues](#8-known-issues--workarounds) for details.
+You also need the MSVC linker and C++ toolset — install the **"Desktop development with C++"** workload from the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). See [SETUP.md](../SETUP.md) for the full prerequisite list.
+
+> **Why MSVC?** `windres` is a GNU-toolchain-only tool. Errors mentioning it mean you are accidentally building with MinGW/GNU, which is not the configuration this project targets. See [Known Issues](#8-known-issues--workarounds).
 
 ### Install links
 
@@ -191,7 +199,10 @@ This section requires a physical Android device or a running Android emulator.
    - [ ] Grade badge (A–F) matching what was shown in the app
    - [ ] Full findings list with severity levels
    - [ ] Causal chain for at least one Critical finding
-   - [ ] Timeline section (populated if ADB profiling was run)
+   - [ ] Timeline section — the report template renders it only when the injected
+         scan payload contains **2 or more** history records, and the current
+         export path writes an empty `history` array, so expect this section to be
+         absent. See `docs/ecotrace-plan.md` Sub-Task 5.
 
 > The exported report is fully self-contained HTML — no internet connection needed to view it.
 
@@ -199,7 +210,7 @@ This section requires a physical Android device or a running Android emulator.
 
 ## 7. Building for Production
 
-> **Important:** EcoTrace uses a custom Cargo target directory to avoid the `windres` spaces-in-path bug on Windows. This is already configured in `.cargo/config.toml` — do not change it.
+> **Important:** EcoTrace pins the Rust build target to the MSVC target triple in `.cargo/config.toml` (`[build] target = "x86_64-pc-windows-msvc"`). Because a target triple is set, Cargo nests its output under a target-triple subdirectory — this is why the build artifacts live in `src-tauri/target/x86_64-pc-windows-msvc/release/` rather than `src-tauri/target/release/`.
 
 ```bash
 # Build the frontend assets first
@@ -214,13 +225,13 @@ npx tauri build
 The compiled executable will be at:
 
 ```
-C:\ecotrace_target\release\ecotrace.exe
+src-tauri/target/x86_64-pc-windows-msvc/release/ecotrace.exe
 ```
 
 The installer bundle (if WiX completes successfully) will be under:
 
 ```
-src-tauri/target/release/bundle/
+src-tauri/target/x86_64-pc-windows-msvc/release/bundle/
 ```
 
 > If the MSI bundle step fails due to a WiX download issue, the `.exe` itself is still usable. See [Known Issues](#8-known-issues--workarounds).
@@ -229,27 +240,25 @@ src-tauri/target/release/bundle/
 
 ## 8. Known Issues & Workarounds
 
-### `windres` error — spaces in path
+### `windres` error
 
-**Symptom:** Build fails with an error referencing `windres` or a path containing spaces.
+**Symptom:** Build fails with an error referencing `windres` or `cc1.exe`.
 
-**Fix:** EcoTrace's `.cargo/config.toml` sets:
-```toml
-[build]
-target-dir = "C:/ecotrace_target"
+**Fix:** `windres` ships with the GNU (MinGW) toolchain, not MSVC. Seeing it means the build is running on the wrong toolchain. Switch back to MSVC:
+
+```bash
+rustup default stable-x86_64-pc-windows-msvc
 ```
-This moves the Cargo output directory to a path without spaces. If you moved the repo to a folder with spaces in its path, this setting resolves the conflict.
+
+This is the same target triple the repo pins in `.cargo/config.toml` (`[build] target = "x86_64-pc-windows-msvc"`) and in the release workflows. No custom `target-dir` is configured or required.
 
 ---
 
 ### MSVC linker not found
 
-**Symptom:** `error: linker 'link.exe' not found` or similar MSVC errors during `cargo build`.
+**Symptom:** `error: linker 'link.exe' not found`, `link.exe failed`, or "MSVC build tools not found" during `cargo build`.
 
-**Fix:** Switch to the MinGW GNU toolchain:
-```bash
-rustup default stable-x86_64-pc-windows-gnu
-```
+**Fix:** The toolchain is correct; the C++ toolset is missing. Install the **"Desktop development with C++"** workload from the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), then open a **new** terminal so the updated `PATH` is picked up. Do not switch to the GNU toolchain — the project targets MSVC.
 
 ---
 
@@ -269,7 +278,7 @@ Alternatively, add ADB's folder to your system `PATH` and restart the app.
 
 **Symptom:** `cargo tauri build` fails during the MSI packaging step with a network or download error.
 
-**Fix:** This is a network issue downloading the WiX toolset installer — it does **not** affect the `.exe` build. The standalone executable at `C:\ecotrace_target\release\ecotrace.exe` is fully functional. Skip the MSI step for development purposes.
+**Fix:** This is a network issue downloading the WiX toolset installer — it does **not** affect the `.exe` build. The standalone executable at `src-tauri/target/x86_64-pc-windows-msvc/release/ecotrace.exe` is fully functional. Skip the MSI step for development purposes.
 
 ---
 

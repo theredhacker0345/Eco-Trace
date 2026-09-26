@@ -15,8 +15,8 @@
         "title": "EcoTrace — Android Energy Intelligence",
         "width": 1400,
         "height": 900,
-        "minWidth": 1400,
-        "minHeight": 900,
+        "minWidth": 960,
+        "minHeight": 620,
         "resizable": true,
         "fullscreen": false,
         "decorations": true

@@ -63,6 +63,86 @@ function lines(content: string): string[] {
   return content.split(/\r?\n/);
 }
 
+/**
+ * Blank out the *contents* of `//`, `/* *\/` and `/** *\/` comments while
+ * preserving every newline, so line numbers reported by detectors stay exact.
+ *
+ * String and character literals are deliberately left untouched: patterns like
+ * N04 need to see the URL text inside `"http://..."`. The scanner skips over
+ * literals so a `//` inside a string is not mistaken for a comment.
+ */
+export function stripComments(content: string): string {
+  const out = content.split("");
+  const n = content.length;
+  let i = 0;
+  let inBlock = false;
+
+  while (i < n) {
+    const c = content[i];
+    const next = content[i + 1];
+
+    if (inBlock) {
+      if (c === "*" && next === "/") {
+        out[i] = " ";
+        out[i + 1] = " ";
+        i += 2;
+        inBlock = false;
+        continue;
+      }
+      if (c !== "\n" && c !== "\r") out[i] = " ";
+      i++;
+      continue;
+    }
+
+    if (c === "/" && next === "*") {
+      out[i] = " ";
+      out[i + 1] = " ";
+      i += 2;
+      inBlock = true;
+      continue;
+    }
+
+    if (c === "/" && next === "/") {
+      while (i < n && content[i] !== "\n") {
+        out[i] = " ";
+        i++;
+      }
+      continue;
+    }
+
+    // String literal — copy verbatim so comment markers inside are ignored.
+    if (c === '"') {
+      i++;
+      while (i < n) {
+        if (content[i] === "\\") { i += 2; continue; }
+        if (content[i] === '"' || content[i] === "\n") { i++; break; }
+        i++;
+      }
+      continue;
+    }
+
+    // Character literal.
+    if (c === "'") {
+      i++;
+      while (i < n) {
+        if (content[i] === "\\") { i += 2; continue; }
+        if (content[i] === "'" || content[i] === "\n") { i++; break; }
+        i++;
+      }
+      continue;
+    }
+
+    i++;
+  }
+
+  return out.join("");
+}
+
+/** Strip comments once per file; detectors only ever see comment-free source. */
+function withoutComments(files: FileContent[]): FileContent[] {
+  return files.map((f) => ({ ...f, content: stripComments(f.content) }));
+}
+
 /** Return the 1-based line number of the first regex match, or -1. */
 function firstMatchLine(content: string, re: RegExp): number {
   const ls = lines(content);
@@ -168,13 +248,11 @@ function detectW02(f: FileContent): Finding[] {
   const ls = lines(f.content);
   for (let i = 0; i < ls.length; i++) {
     if (/\.acquire\(/.test(ls[i])) {
-      // Look within the next 10 lines for an IPC call
+      // Look within the next 10 lines for an IPC call. AIDL/binder calls are
+      // matched by the trailing `...<method>(` on a bound-service reference,
+      // which is the shape the previous placeholder pattern failed to catch.
       const window = ls.slice(i + 1, i + 11).join("\n");
-      if (
-        /startService\(|bindService\(|sendBroadcast\(|\.someMethod\(/.test(
-          window
-        )
-      ) {
+      if (/startService\(|bindService\(|sendBroadcast\(|startWakefulService\(/.test(window)) {
         results.push(
           finding(
             "W02",
@@ -837,7 +915,7 @@ export function buildCallGraph(files: FileContent[]): CallGraph {
     /(?:fun\s+|(?:public|private|protected|static|void|override)\s+(?:\w+\s+)*)(\w+)\s*\(/g;
   const callRe = /(\w+)\s*\(/g;
 
-  for (const f of files) {
+  for (const f of withoutComments(files)) {
     const ls = lines(f.content);
     let currentMethod = "<top>";
 
@@ -984,11 +1062,19 @@ const allFilesForChain = new Map<string, FileContent>();
 export function analyzeProject(files: FileContent[]): Finding[] {
   const results: Finding[] = [];
 
+  // Detectors run against comment-free source. Without this, documentation
+  // comments that *name* an anti-pattern (e.g. "W01 — WakeLock.acquire()")
+  // both raise false positives and suppress real detections, because the
+  // negative guard sees the word in prose.
+  const scan = withoutComments(files);
+  const originalByPath = new Map<string, string>();
+  for (const f of files) originalByPath.set(f.path, f.content);
+
   // Populate the file map used by detectMethodAtLine / traceCallChain
   allFilesForChain.clear();
-  for (const f of files) allFilesForChain.set(f.path, f);
+  for (const f of scan) allFilesForChain.set(f.path, f);
 
-  for (const f of files) {
+  for (const f of scan) {
     results.push(...detectW01(f));
     results.push(...detectW02(f));
     results.push(...detectW03(f));
@@ -1001,20 +1087,26 @@ export function analyzeProject(files: FileContent[]): Finding[] {
     results.push(...detectN03(f));
     results.push(...detectN04(f));
     results.push(...detectN05(f));
-    results.push(...detectN06(files, f));
+    results.push(...detectN06(scan, f));
 
     results.push(...detectL01(f));
     results.push(...detectL02(f));
     results.push(...detectL03(f));
     results.push(...detectL04(f));
-    results.push(...detectL05(files, f));
+    results.push(...detectL05(scan, f));
 
     results.push(...detectA01(f));
-    results.push(...detectA02(files, f));
-    results.push(...detectA03(files, f));
+    results.push(...detectA02(scan, f));
+    results.push(...detectA03(scan, f));
     results.push(...detectA04(f));
     results.push(...detectA05(f));
     results.push(...detectA06(f));
+  }
+
+  // Report the real source line, not the comment-stripped copy.
+  for (const r of results) {
+    const original = originalByPath.get(r.file);
+    if (original !== undefined) r.snippet = snippet(original, r.line);
   }
 
   // Sort: Critical first, then High, then Medium; within severity by file
@@ -1026,7 +1118,9 @@ export function analyzeProject(files: FileContent[]): Finding[] {
   results.sort((a, b) => {
     const sd = severityOrder[a.severity] - severityOrder[b.severity];
     if (sd !== 0) return sd;
-    return a.file.localeCompare(b.file);
+    const fd = a.file.localeCompare(b.file);
+    if (fd !== 0) return fd;
+    return a.line - b.line;
   });
 
   return results;

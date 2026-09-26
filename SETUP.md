@@ -52,8 +52,10 @@ npm run tauri build
 
 The compiled installer will be at:
 ```
-src-tauri/target/release/bundle/nsis/EcoTrace_0.1.0_x64-setup.exe
+src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/EcoTrace_0.1.0_x64-setup.exe
 ```
+
+> The `x86_64-pc-windows-msvc` path segment comes from the target triple pinned in `.cargo/config.toml`. Do not switch to the GNU toolchain — it is not the configuration this project builds with.
 
 Or download a pre-built installer from the [Releases page](https://github.com/theredhacker0345/Eco-Trace/releases).
 
