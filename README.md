@@ -491,7 +491,7 @@ selects the deepest chain rather than the first finding.
 
 | | |
 |---|---|
-| **Hosted demo** | *(add your deployment URL here — see Deploy below)* |
+| **Hosted demo** | **https://theredhacker0345.github.io/Eco-Trace/** — *(once Pages is enabled; see Deploy below)* |
 | **Pitch deck** | [`docs/deck/EcoTrace-pitch-deck.pdf`](docs/deck/EcoTrace-pitch-deck.pdf) — 11 slides, 16:9 |
 | **Windows build** | [Releases](https://github.com/theredhacker0345/Eco-Trace/releases) |
 
@@ -511,31 +511,66 @@ it looked is a tool you cannot calibrate against.
 
 ### Deploy
 
-The build output is portable — `vite.config.ts` sets `base: "./"`, so one
-`dist/` deploys to a domain root, a subpath, or straight off disk.
+GitHub Pages is the primary target. The build output is portable — `vite.config.ts`
+sets `base: "./"` — so one `dist/` deploys to a domain root, a subpath, or
+straight off disk.
 
-**Vercel (one command).** `vercel.json` and `.vercelignore` are committed, so:
+**GitHub Pages.** Everything is committed except one switch in the GitHub UI:
+
+1. **Settings → Pages → Source: `GitHub Actions`**
+2. Push to `main`, or re-run **Deploy demo** from the Actions tab
+
+The URL is printed in the workflow summary and appears at
+`https://theredhacker0345.github.io/Eco-Trace/`.
+
+`.github/workflows/deploy-demo.yml` typechecks, builds, and **asserts the bundle
+actually contains the demo** before publishing — a deploy serving an empty
+workbench is worse than no deploy, so a regression fails the build rather than
+shipping a blank page to a submission form. Until you flip the switch the
+`deploy` job fails with *"Ensure GitHub Pages has been enabled"*; the `build`
+job passes either way, which is how you tell the two apart.
+
+**Vercel, if you prefer it.** `vercel.json` and `.vercelignore` are committed:
 
 ```bash
 npx vercel login     # once
-npx vercel --prod    # builds, deploys, prints the URL
+npx vercel --prod
 ```
 
 Or import the repo at [vercel.com/new](https://vercel.com/new) and accept the
-Vite preset — no configuration required. The relative base works as-is, and the
-frontend is the only thing deployed.
-
-**GitHub Pages (configured, no extra account).**
-`.github/workflows/deploy-demo.yml` runs on every push to `main`, typechecks,
-builds, asserts the bundle actually contains the demo, and publishes. To turn it
-on: **Settings → Pages → Source: GitHub Actions**. The URL appears in the
-workflow summary after the first run. The `deploy` job fails with
-*"Ensure GitHub Pages has been enabled"* until you do — the `build` job passes
-either way, which is how you tell the two apart.
+Vite preset. The `.vercelignore` keeps the Rust toolchain and the desktop targets
+out of the deploy, which would otherwise install a full Tauri build toolchain for
+files the hosted bundle never reads.
 
 **Locally.** `npm run build && npx serve dist` — the demo mounts in any static
 server, because the check for a Tauri bridge is a runtime one rather than a
 build-time one.
+
+#### Verified against a subpath
+
+GitHub Pages serves from `/<repo>/`, not a domain root, which is the one shape
+that breaks a Vite SPA and the reason `base` exists. Both of the things that
+usually fail there were tested by serving `dist/` from a real
+`http://localhost/Eco-Trace/` subpath:
+
+| | |
+|---|---|
+| Assets resolved | 16 loaded, **0 × 404** |
+| Console errors | **none** |
+| Demo mounted | 18 findings, 4-hop causal chain, banner shown |
+| **Web Worker chunks** | **both HTTP 200, booted, completed a real analysis** |
+| IBM Plex fonts | all 5 weights loaded, no fallback |
+| Favicon | HTTP 200 |
+| Report export | 331 KB self-contained file downloaded |
+
+The worker is the interesting one: `new URL('./worker.ts', import.meta.url)` is
+resolved by the browser at runtime, not rewritten at build time, so a naive
+relative base can still 404 it. Vite emits the reference as `./worker-*.js`
+relative to the module, which resolves correctly at any base — confirmed by
+executing it, not by reading the output.
+
+`dist/.nojekyll` is shipped so Pages serves the directory verbatim rather than
+running it through Jekyll.
 
 ### What the hosted build deliberately does not do
 
