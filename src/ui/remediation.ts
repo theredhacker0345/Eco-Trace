@@ -202,11 +202,6 @@ WorkManager.getInstance(context)
     )`,
 };
 
-export interface FixSource {
-  /** Fix produced by IBM Bob 2.0, if the model returned one for this rule. */
-  bobFix?: string;
-}
-
 /** The fix text to show for a finding, preferring Bob's version. */
 export function fixFor(finding: Finding, bobFix?: string): string {
   if (bobFix && bobFix.trim().length > 0) return bobFix;

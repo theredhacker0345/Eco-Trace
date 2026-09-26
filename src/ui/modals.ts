@@ -1,11 +1,13 @@
 /**
- * Modal surfaces: settings and scan history.
+ * Modal surfaces: the landing overlay, settings and scan history.
  *
- * Both are Carbon composed modals — header, scrollable body, right-aligned
- * footer actions — with focus trapped while open and returned to the trigger
- * on close. Focus trapping is the single most-missed detail in a desktop app
- * with dialogs, and it is the reason a user tabbing through Settings does not
- * silently land in the inert workbench behind it.
+ * Settings and scan history are both Carbon composed modals — header,
+ * scrollable body, right-aligned footer actions — with focus trapped while
+ * open and returned to the trigger on close. The landing overlay is the same
+ * trap driven from the markup's own `data-open` flag. Focus trapping is the
+ * single most-missed detail in a desktop app with dialogs, and it is the
+ * reason a user tabbing through Settings does not silently land in the inert
+ * workbench behind it.
  */
 
 import type { ScanRecord } from "../grader/grade.js";
@@ -16,9 +18,105 @@ import { dateTime, relPath } from "./format.js";
 const traps = new WeakMap<HTMLElement, FocusTrap>();
 const escapeHandlers = new WeakMap<HTMLElement, (event: KeyboardEvent) => void>();
 
+// ---------------------------------------------------------------------------
+// Landing overlay
+// ---------------------------------------------------------------------------
+
+/*
+ * The start-up overlay is not a composed modal — it is static markup that is
+ * open at load and dismissed by writing `data-open="false"` from two places
+ * (the project loader and the demo mount) — so it cannot go through
+ * `openModal`, which owns its own open/close transition. Instead the attribute
+ * is watched, which means every dismissal path releases the trap and no caller
+ * has to remember to.
+ *
+ * It is also the one surface that can have a modal opened *on top* of it
+ * (Settings from the landing's own button), and two live focus traps fight
+ * over Tab. `suspendLanding()` parks the overlay's trap while another modal
+ * owns the surface and `resumeLanding()` takes it back afterwards.
+ */
+let landingRoot: HTMLElement | null = null;
+let landingTrap: FocusTrap | null = null;
+let landingSuspended = false;
+
+function syncLanding(): void {
+  const visible = landingRoot?.dataset.open === "true";
+  const wanted = Boolean(visible) && !landingSuspended;
+
+  if (wanted && !landingTrap && landingRoot) {
+    const root = landingRoot;
+    root.addEventListener("keydown", onLandingKeydown);
+    landingTrap = trapFocus(root);
+    // Focus the primary action: the reason the overlay is on screen is the one
+    // button that gets the person past it. `trapFocus` would otherwise take
+    // whichever control happens to come first in the markup.
+    const primary = document.getElementById("btn-landing-open");
+    if (primary instanceof HTMLButtonElement) primary.focus();
+    return;
+  }
+
+  if (!wanted && landingTrap && landingRoot) {
+    landingRoot.removeEventListener("keydown", onLandingKeydown);
+    landingTrap.release();
+    landingTrap = null;
+  }
+}
+
+/** Escape dismisses the overlay exactly as the close control does. */
+function onLandingKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Escape") return;
+  event.stopPropagation();
+  dismissLanding();
+}
+
+/** Dismisses the overlay; the attribute watcher releases the trap. */
+function dismissLanding(): void {
+  if (landingRoot) landingRoot.dataset.open = "false";
+}
+
+/**
+ * Hands the keyboard to another surface drawn over the landing overlay, and
+ * takes it back afterwards. Exported for the command palette, which is bound
+ * to a global key and can therefore open while the overlay is still up.
+ */
+export function suspendLanding(): void {
+  if (!landingRoot || landingSuspended) return;
+  landingSuspended = true;
+  syncLanding();
+}
+
+/** Undoes `suspendLanding`, re-trapping the overlay if it is still visible. */
+export function resumeLanding(): void {
+  if (!landingSuspended) return;
+  landingSuspended = false;
+  syncLanding();
+}
+
+/** Wires the landing overlay: trap, Escape, and its close control. */
+function initLanding(): void {
+  landingRoot = qs("landing");
+  landingSuspended = false;
+
+  // Guarded: the close control belongs to the markup, and its absence must not
+  // take the overlay down with it.
+  document
+    .getElementById("btn-landing-close")
+    ?.addEventListener("click", dismissLanding);
+
+  new MutationObserver(syncLanding).observe(landingRoot, {
+    attributes: true,
+    attributeFilter: ["data-open"],
+  });
+  syncLanding();
+}
+
 function openModal(root: HTMLElement, onEscape: () => void): void {
   if (root.dataset.open === "true") return;
   root.dataset.open = "true";
+  // Park the landing trap before installing this one, so a single trap is
+  // listening for Tab and the overlay cannot pull focus back out of a modal
+  // opened on top of it.
+  suspendLanding();
   traps.set(root, trapFocus(root));
 
   const onKeydown = (event: KeyboardEvent): void => {
@@ -43,10 +141,10 @@ function closeModal(root: HTMLElement): void {
 
   traps.get(root)?.release();
   traps.delete(root);
-}
 
-export function isModalOpen(root: HTMLElement): boolean {
-  return root.dataset.open === "true";
+  // If this modal was opened over the landing overlay, the overlay is still
+  // there and still has to hold focus.
+  resumeLanding();
 }
 
 export function closeSettings(): void {
@@ -135,6 +233,8 @@ export function closeHistory(): void {
 }
 
 export function initModals(): void {
+  initLanding();
+
   const settings = qs("settings-overlay");
   const history = qs("history-overlay");
 

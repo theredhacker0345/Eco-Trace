@@ -546,7 +546,7 @@ frozen window cannot report its own progress, so a long scan looked like a hang.
 |---|---|---|
 | Desktop shell | Tauri 2.0 | 3-8 MB binary, no Electron bloat, native OS integration |
 | App logic | TypeScript 5.0 | Strong types, fast iteration |
-| System layer | Rust (minimal) | Four rooted commands: `walk_dir`, `read_file`, `read_text`, `read_manifest` |
+| System layer | Rust (minimal) | Five rooted commands: `walk_dir`, `read_file`, `read_text`, `read_manifest`, `apply_patch` |
 | Analysis thread | Web Worker | Keeps 23 detector passes + call-graph build off the UI thread |
 | AI engine | IBM Bob 2.0 (optional) | Severity revision and per-chain fixes — the product is fully functional without it |
 | Storage | Local JSON | Scan history, offline-first, zero cloud dependencies |
@@ -580,7 +580,7 @@ What runs, and what honestly does not:
   template, which is exactly what a user without a key sees in the desktop app.
 
 The sample is [`src/demo-project/`](src/demo-project/README.md) — EcoTrace's own
-**rule test corpus**: ten sources with deliberately planted defects, seven
+**rule test corpus**: eight sources with deliberately planted defects, nine
 deliberately clean. The clean ones are the point. They are what the report's
 coverage matrix renders as an explicit zero, and a tool that has not shown you
 it looked is a tool you cannot calibrate against.

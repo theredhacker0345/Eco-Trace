@@ -10,9 +10,9 @@
  * part of the view rather than an afterthought.
  */
 
-import { esc, icon, qs, qsa } from "./dom.js";
-import { clockTime, relPath } from "./format.js";
-import { state, subscribe, type LogLevel } from "./store.js";
+import { esc, qs, qsa } from "./dom.js";
+import { clockTime } from "./format.js";
+import type { LogLevel } from "./store.js";
 
 type Filter = "all" | "critical" | "success";
 
@@ -20,8 +20,6 @@ interface Entry {
   level: LogLevel;
   time: string;
   message: string;
-  /** Project-relative path, when the entry points at a specific file. */
-  ref?: string;
 }
 
 const entries: Entry[] = [];
@@ -36,18 +34,12 @@ function levelMatches(level: LogLevel): boolean {
 }
 
 function rowMarkup(entry: Entry): string {
-  const ref = entry.ref
-    ? `<button class="cx-log__ref" data-ref="${esc(entry.ref)}" title="Reveal this file in the navigator">
-         ${icon("file", "i--xs")} ${esc(entry.ref)}
-       </button>`
-    : "";
   return `
     <div class="cx-log__line" data-level="${entry.level}">
       <span class="cx-log__time">${esc(entry.time)}</span>
       <span class="cx-log__level">${esc(entry.level)}</span>
       <span>
         <span class="cx-log__msg">${esc(entry.message)}</span>
-        ${ref}
       </span>
     </div>`;
 }
@@ -82,8 +74,8 @@ function onScroll(): void {
   }
 }
 
-export function log(level: LogLevel, message: string, ref?: string): void {
-  entries.push({ level, message, time: clockTime(), ref });
+export function log(level: LogLevel, message: string): void {
+  entries.push({ level, message, time: clockTime() });
   // Bound the buffer: a long scan on a large project can emit thousands of
   // lines, and an unbounded array in a long-lived desktop app is a leak.
   if (entries.length > 2000) entries.splice(0, entries.length - 2000);
@@ -107,16 +99,6 @@ export function initRunLog(): void {
 
   stream.addEventListener("scroll", onScroll, { passive: true });
 
-  // Clicking a file reference reveals it in the navigator and scopes the
-  // findings table to it: the log is a navigation surface, not just output.
-  stream.addEventListener("click", (event) => {
-    const ref = (event.target as HTMLElement).closest<HTMLElement>(".cx-log__ref");
-    if (!ref?.dataset.ref) return;
-    document.dispatchEvent(
-      new CustomEvent("ecotrace:reveal-file", { detail: ref.dataset.ref })
-    );
-  });
-
   document.getElementById("btn-log-clear")?.addEventListener("click", () => {
     entries.length = 0;
     render();
@@ -125,7 +107,7 @@ export function initRunLog(): void {
   document.getElementById("btn-log-copy")?.addEventListener("click", async () => {
     const text = entries
       .filter((entry) => levelMatches(entry.level))
-      .map((entry) => `${entry.time}  ${entry.level.padEnd(8)}  ${entry.message}${entry.ref ? `  (${entry.ref})` : ""}`)
+      .map((entry) => `${entry.time}  ${entry.level.padEnd(8)}  ${entry.message}`)
       .join("\n");
     await navigator.clipboard.writeText(text || "EcoTrace run log was empty.");
     document.dispatchEvent(new CustomEvent("ecotrace:copied", { detail: "Run log copied" }));
@@ -139,15 +121,7 @@ export function initRunLog(): void {
     if (follow) render();
   });
 
-  subscribe(["log"], render);
+  // No subscription to the store: `log()` renders as it appends, and the
+  // events the rest of the app emits are about findings, not about this view.
   render();
-}
-
-/** Convenience wrapper that also converts an absolute path to a project path. */
-export function logFinding(level: LogLevel, message: string, absPath: string): void {
-  log(level, message, relPath(absPath, state.projectPath));
-}
-
-export function logCount(): number {
-  return entries.length;
 }

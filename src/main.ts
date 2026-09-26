@@ -201,19 +201,21 @@ async function boot(): Promise<void> {
 }
 
 /**
- * Development convenience: when the app is served by Vite rather than launched
- * by Tauri, there is no folder picker and no IPC, so the workbench would have
- * nothing to show. In that case — and only in that case — index the bundled
- * Java fixtures so the interface can be reviewed with real findings in it.
- * The dynamic import keeps both the harness and the fixtures out of a release
- * build.
+ * Mounts demo mode when the app is running outside the Tauri shell.
+ *
+ * The check is a runtime one — `__TAURI_INTERNALS__` is injected by Tauri, so
+ * its absence means the same bundle is being served over HTTP with no folder
+ * picker and no IPC behind it. In that case the bundled Java fixtures are
+ * indexed so the workbench has real findings to show. The dynamic import keeps
+ * both the harness and the fixtures out of a desktop build that never reaches
+ * this branch.
  */
 async function mountBrowserPreviewIfNeeded(): Promise<void> {
-  // Replaced by demo mode. This used to be gated on `import.meta.env.DEV`, which
-  // meant a hosted build opened onto an empty workbench: every panel rendered
-  // and none of them had anything to show. Demo mode is a runtime decision
-  // about the shell, not a build-time one, so the same bundle serves the
-  // desktop app and the hosted demo.
+  // Demo mode replaced the old `import.meta.env.DEV`-gated preview, which was
+  // a build-time decision: a *hosted* build opened onto an empty workbench,
+  // every panel rendered and none of them had anything to show. Demo mode is a
+  // runtime decision about the shell, so the same bundle serves the desktop
+  // app and the hosted demo.
   if ("__TAURI_INTERNALS__" in window) return;
   try {
     const { mountDemoMode, rewireDemoAnalyze } = await import("./ui/demo.js");
@@ -940,11 +942,6 @@ async function stopProfile(): Promise<void> {
     `Measured ${measured} mAh/min`,
     `Composite grade moved to ${grade.letter} (${grade.numericScore}/100) — ${provenance}.`
   );
-  notify(
-    grade.letter === "F" || grade.letter === "D" ? "warning" : "success",
-    `Measured ${delta.drainRateMahPerMin.toFixed(2)} mAh/min`,
-    `Composite grade moved to ${grade.letter} (${grade.numericScore}/100).`
-  );
 
   if (state.projectPath) {
     const record: ScanRecord = {
@@ -1042,11 +1039,17 @@ function wireSettings(): void {
   const adbPath = qs<HTMLInputElement>("input-adb-path");
   const model = qs<HTMLSelectElement>("input-bob-model");
   const note = qs("settings-note");
+  // Guarded rather than `qs`: `qs` throws on a missing id, and one optional
+  // field must not be able to take the whole settings panel down with it.
+  const verifyCommand = document.getElementById(
+    "input-verify-command"
+  ) as HTMLInputElement | null;
 
   const hydrate = (): void => {
     apiKey.value = state.settings.apiKey;
     adbPath.value = state.settings.adbPath;
     model.value = state.settings.bobModel;
+    if (verifyCommand) verifyCommand.value = state.settings.verifyCommand;
   };
 
   hydrate();
@@ -1117,19 +1120,27 @@ function wireSettings(): void {
       adbPath: adbPath.value.trim() || "adb",
       apiKey: apiKey.value.trim(),
       bobModel: (model.value as AppSettings["bobModel"]) || "bob-2",
+      verifyCommand: verifyCommand
+        ? verifyCommand.value.trim()
+        : state.settings.verifyCommand,
     };
     state.settings = next;
 
+    // The footer note belongs to the modal, so it is written while the modal
+    // is still open. Setting it after `closeSettings()` meant the message was
+    // only ever read on the *next* open of the panel, long after the save it
+    // describes.
+    //
     // Persisting resolves through the Tauri filesystem plugin, which does not
     // exist in a hosted build. The settings are still applied in memory for
     // this session — there is just nowhere to write them — and the note says so
     // rather than the save appearing to succeed and then vanishing on reload.
     if (isHostedBuild()) {
       syncConnectionIndicator();
-      closeSettings();
-      emit("settings");
       note.textContent =
         "Applied for this session only. The hosted build has no filesystem, so this cannot be saved.";
+      closeSettings();
+      emit("settings");
       log("system", unavailableReason("Saving settings"));
       notify(
         "info",
@@ -1141,9 +1152,9 @@ function wireSettings(): void {
 
     await saveSettings(next);
     syncConnectionIndicator();
+    note.textContent = "Settings saved locally.";
     closeSettings();
     emit("settings");
-    note.textContent = "Settings saved locally.";
     log("system", `Settings saved. Model ${next.bobModel}, ADB ${next.adbPath}.`);
     notify("success", "Settings saved", "Stored in %APPDATA%\\ecotrace\\settings.json");
   });
@@ -1157,11 +1168,19 @@ function wireSettings(): void {
 let lastMeasurement: DumpsysDelta | null = null;
 
 function reportBasename(): string {
-  const project = (state.projectPath ?? "project")
-    .replace(/[\\/]+$/, "")
-    .split(/[\\/]/)[0]
-    .replace(/[^\w.-]+/g, "-")
-    .toLowerCase();
+  // The export is named after the project folder, not after the drive it
+  // happens to sit on: taking the first segment of `C:\work\AutoTrack` gave
+  // `ecotrace-c--<date>.html` for every project on that drive. The last
+  // meaningful segment is the folder name, which is the same rule
+  // `projectName()` applies in ./report/payload.ts.
+  const trimmed = (state.projectPath ?? "").replace(/[\\/]+$/, "");
+  const segment = trimmed.split(/[\\/]/).pop() ?? "";
+  // A root path ("C:", "/") has no project folder of its own — fall back
+  // rather than emit a slug that is just a drive letter.
+  const name = /^[A-Za-z]:$/.test(segment) ? "" : segment;
+  const project =
+    name.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() ||
+    "project";
   return `ecotrace-${project}-${new Date().toISOString().slice(0, 10)}`;
 }
 
@@ -1621,13 +1640,11 @@ function focusSearch(): void {
 // ---------------------------------------------------------------------------
 
 function wireGlobalEvents(): void {
-  // The navigator publishes file selections; the store is the single owner of
-  // scope so the table and the tree can never disagree.
-  document.addEventListener("ecotrace:reveal-file", (event) => {
-    const abs = (event as CustomEvent<string>).detail;
-    if (state.files.some((f) => f.path === abs)) revealFile(abs, false);
-  });
-
+  // `ecotrace:reveal-file` is owned by the navigator, which resolves both the
+  // absolute paths the dispatchers send and project-relative ones against
+  // `state.projectPath`. This used to carry a second, absolute-only listener:
+  // two handlers for one event, one of which (the relative arm in the
+  // navigator) never matched anything.
   document.addEventListener("ecotrace:files-changed", registerCommands);
 
   log("system", "Session initialised.");

@@ -280,9 +280,13 @@ function extractDiff(text: string, fallbackPath: string): string | null {
   if (!/^(---\s|\+\+\s|@@\s)/m.test(body.trim())) return null;
 
   // A model that omits the file headers still produced a usable hunk; supply
-  // them rather than discarding an otherwise valid patch.
+  // them rather than discarding an otherwise valid patch. Nothing else is
+  // rewritten here: the `@@` hunk header is left exactly as the model wrote
+  // it, because its line numbers are the one thing this function cannot
+  // reconstruct — an identity replace of the header that used to sit here
+  // changed nothing while suggesting otherwise.
   if (!/^---\s/m.test(body)) {
-    return `--- a/${fallbackPath}\n+++ b/${fallbackPath}\n${body.replace(/^@@.*$/m, (m) => m)}`;
+    return `--- a/${fallbackPath}\n+++ b/${fallbackPath}\n${body}`;
   }
   return body;
 }

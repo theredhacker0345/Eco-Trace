@@ -25,17 +25,13 @@ export function qsa<T extends HTMLElement = HTMLElement>(
   return Array.from(root.querySelectorAll<T>(selector));
 }
 
-/** Typed lookups for the three control types whose properties are mutated. */
+/** Typed lookups for the two control types whose properties are mutated. */
 export function qsButton(id: string): HTMLButtonElement {
   return qs<HTMLButtonElement>(id);
 }
 
 export function qsInput(id: string): HTMLInputElement {
   return qs<HTMLInputElement>(id);
-}
-
-export function qsSelect(id: string): HTMLSelectElement {
-  return qs<HTMLSelectElement>(id);
 }
 
 const ICON_SIZES = new Set(["", " i--sm", " i--xs", " i--lg", " i--xl"]);
@@ -63,23 +59,6 @@ const ESCAPES: Record<string, string> = {
 /** Escapes text for interpolation into an HTML template string. */
 export function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ESCAPES[ch]);
-}
-
-/** Types an element as a checkbox input without a cast at every call site. */
-export function asCheckbox(el: HTMLElement): HTMLInputElement {
-  return el as HTMLInputElement;
-}
-
-export function setHidden(el: HTMLElement, hidden: boolean): void {
-  el.hidden = hidden;
-}
-
-export function toggleClass(
-  el: Element,
-  className: string,
-  on: boolean
-): void {
-  el.classList.toggle(className, on);
 }
 
 /**

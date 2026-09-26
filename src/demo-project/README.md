@@ -17,7 +17,7 @@ Seventeen sources: eight carrying known defects, nine deliberately clean.
 
 The rule column is the **contract**, not a summary: `npm run analyzer:check`
 asserts that every rule listed here fires in the file it names, that no
-undocumented rule fires in it either, and that the seven clean files stay silent.
+undocumented rule fires in it either, and that the nine clean files stay silent.
 An extra rule in a file is a documentation bug, and the check fails on it.
 
 | File | Planted | Rules |

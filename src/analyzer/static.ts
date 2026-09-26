@@ -311,6 +311,42 @@ function callArguments(text: string, from: number): string {
   return text.slice(open + 1);
 }
 
+/**
+ * Splits a call's argument list on its *top-level* commas.
+ *
+ * Bracket and quote depth are tracked so a nested call, an anonymous-class
+ * body and a string literal each stay in one piece. This is what lets a
+ * detector address "the 2nd argument" rather than "the first number in the
+ * text", which is the difference between reading a millisecond interval and
+ * reading a metre distance.
+ */
+function splitArguments(raw: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  let quote = "";
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (quote) {
+      if (c === "\\") i++;
+      else if (c === quote) quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") depth--;
+    else if (c === "," && depth === 0) {
+      parts.push(raw.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(raw.slice(start).trim());
+  return parts;
+}
+
 /** True when `onBind()` returns something other than `null`, i.e. a bound service. */
 function isBoundService(content: string): boolean {
   const m = content.match(/IBinder\s+onBind\s*\([^)]*\)\s*\{([\s\S]{0,240}?)\}/);
@@ -332,6 +368,10 @@ function isBoundService(content: string): boolean {
  *   // ecotrace-disable-next-line W01   suppress on the following line
  *   // ecotrace-ignore-file N02         suppress across the whole file
  *   @Suppress("EcoTrace:W01")          suppress across the whole file
+ *
+ * A directive that names no recognised rule suppresses nothing: only a bare
+ * directive (no tokens at all) means "every rule". Prose that happens to
+ * contain the words `ecotrace-ignore` is a comment, not an instruction.
  */
 interface Suppressions {
   file: Set<string>;
@@ -352,12 +392,22 @@ function collectSuppressions(content: string): Suppressions {
 
   /** Turns the text after a directive into rule ids; a bare directive = all. */
   const parse = (raw: string): string[] => {
-    const ids = raw
+    // Only tokens containing a letter or digit count as tokens, so trailing
+    // punctuation (`// ecotrace-ignore:`, a period) still reads as "no ids
+    // given" rather than as an unrecognised id.
+    const tokens = raw
       .split(/[\s,;"'{}\[\]]+/)
-      .map((t) => t.trim().toUpperCase())
+      .filter((t) => /[A-Za-z0-9]/.test(t));
+    if (tokens.length === 0) return ["*"];
+    // Prose after a directive (`// see ecotrace-ignore policy`) names no rule,
+    // and an id nobody recognises is not a wildcard: returning ["*"] for an
+    // unrecognised token used to silence the whole line for a comment that
+    // merely mentioned the directive in passing. Only recognised ids suppress,
+    // and a directive that recognises none suppresses nothing.
+    return tokens
+      .map((t) => t.toUpperCase())
       .filter((t) => SUPPRESSION_RULE.test(t))
       .map((t) => t.replace(/^ECOTRACE:/, ""));
-    return ids.length > 0 ? ids : ["*"];
   };
 
   const src = content.split(/\r?\n/);
@@ -384,7 +434,9 @@ function collectSuppressions(content: string): Suppressions {
 
     // An annotation that names EcoTrace explicitly opts the whole file out,
     // because that is the only reading under which the prefix means anything.
-    // A generic @Suppress("W01") is scoped to the declaration it annotates.
+    // A generic @Suppress("W01") sits on the line above the declaration it
+    // scopes, so it covers the annotated line and the one it introduces — and
+    // only those two lines.
     const annotationRe = /@Suppress(?:Warnings)?\s*\(\s*\{?\s*"([^"]+)"[^)]*\)/g;
     let annotation: RegExpExecArray | null;
     while ((annotation = annotationRe.exec(line)) !== null) {
@@ -393,7 +445,10 @@ function collectSuppressions(content: string): Suppressions {
       if (/ecotrace:/i.test(value)) {
         for (const id of ids) fileWide.add(id);
       } else {
-        for (const id of ids) add(i + 1, [id]);
+        for (const id of ids) {
+          add(i + 1, [id]);
+          add(i + 2, [id]);
+        }
       }
     }
   }
@@ -404,16 +459,19 @@ function collectSuppressions(content: string): Suppressions {
 /**
  * Whether a directive covers `line`.
  *
- * A directive on the line above a finding counts too, because that is where a
- * comment explaining "this lock is intentional" naturally sits.
+ * Matching is exact: `ecotrace-ignore` on line i covers line i,
+ * `ecotrace-disable-next-line` on line i covers line i+1, and nothing reaches
+ * past the line it was written for. The previous version also consulted
+ * line-1 *and* recorded the inline directive on its own line, so one
+ * `// ecotrace-ignore` silenced both its line and the line below it — a second,
+ * unasked-for suppression that made it impossible to write an inline ignore
+ * that stopped where it was written. A comment above the finding is still
+ * expressible: that is what `ecotrace-disable-next-line` is for.
  */
 function suppressionApplies(s: Suppressions, line: number, rule: string): boolean {
   if (s.file.has("*") || s.file.has(rule)) return true;
-  for (let i = 0; i < 2; i++) {
-    const set = s.lines.get(line - i);
-    if (set && (set.has("*") || set.has(rule))) return true;
-  }
-  return false;
+  const set = s.lines.get(line);
+  return !!set && (set.has("*") || set.has(rule));
 }
 
 /**
@@ -457,6 +515,57 @@ function finding(
     snippet: snippet(content, line),
     description,
     causalChainHint,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Project-level facts
+//
+// Four rules ask a project-wide question before a file-level one: "is there a
+// push channel anywhere" (N06), "does anything use the GeofencingClient" (L05),
+// "is WorkManager available as the alternative" (A02), "does anything ever
+// submit scheduled work" (A03). Answering those per candidate finding with
+// `files.some(...)` re-scanned every file once per file — quadratic against the
+// 20k-file cap. The facts are computed once per analysis instead and handed to
+// the detectors; `analyzeProject`'s exported signature is unchanged because the
+// facts are an internal detail of one run, not part of the module's contract.
+// ---------------------------------------------------------------------------
+
+/**
+ * Evidence that the project submits a job or a work request. A03 shape 1
+ * (constraints written, never submitted) is only a defect when this is absent
+ * everywhere, so it is a project-level fact rather than a per-file scan.
+ */
+const SUBMITS_SCHEDULED_WORK =
+  /\.schedule\s*\(|WorkManager\s*\.\s*getInstance\s*\(|\.enqueue\s*\(\s*\w*(?:Request|Work)/;
+
+interface ProjectFacts {
+  /** Some file configures FCM/SSE/WebSocket, so a poller is not a defect. */
+  hasPushChannel: boolean;
+  /** Some file uses the GeofencingClient API, so polling geofences is redundant. */
+  hasGeofencing: boolean;
+  /** Some file schedules work with WorkManager — A02's alternative exists. */
+  hasWorkManager: boolean;
+  /** Some file submits a job or work request — A03 shape 1 needs this absent. */
+  submitsWork: boolean;
+  /** Some file names WorkManager or JobScheduler — A03 shape 2 needs this absent. */
+  hasJobSchedulerOrWorkManager: boolean;
+}
+
+/** The project-wide answers, computed once over the files actually scanned. */
+function projectFacts(files: FileContent[]): ProjectFacts {
+  return {
+    hasPushChannel: files.some((fi) => PUSH_CHANNEL.test(fi.content)),
+    hasGeofencing: files.some((fi) =>
+      /GeofencingClient|Geofence\.Builder|addGeofences/.test(fi.content)
+    ),
+    hasWorkManager: files.some((fi) =>
+      /WorkManager|Worker\b|CoroutineWorker/.test(fi.content)
+    ),
+    submitsWork: files.some((fi) => SUBMITS_SCHEDULED_WORK.test(fi.content)),
+    hasJobSchedulerOrWorkManager: files.some((fi) =>
+      /WorkManager|JobScheduler/.test(fi.content)
+    ),
   };
 }
 
@@ -850,7 +959,7 @@ function detectN05(f: FileContent): Finding[] {
 }
 
 // N06 — Polling without FCM/WebSocket
-function detectN06(files: FileContent[], f: FileContent): Finding[] {
+function detectN06(facts: ProjectFacts, f: FileContent): Finding[] {
   // Only flag if: this file re-arms a timer AND actually talks to the network
   // (both are uses, not mentions), and the project has no push channel.
   const hasScheduler =
@@ -859,8 +968,7 @@ function detectN06(files: FileContent[], f: FileContent): Finding[] {
     );
   if (!hasScheduler) return [];
   if (!NETWORK_CALL_SITE.test(f.content)) return [];
-  const projectHasPush = files.some((fi) => PUSH_CHANNEL.test(fi.content));
-  if (projectHasPush) return [];
+  if (facts.hasPushChannel) return [];
   const line = firstMatchLine(
     f.content,
     /setRepeating\s*\(|setInexactRepeating\s*\(|RTC_WAKEUP|ELAPSED_REALTIME_WAKEUP|scheduleAtFixedRate\s*\(|\.postDelayed\s*\(/
@@ -892,32 +1000,41 @@ function detectL01(f: FileContent): Finding[] {
     const m = callRe.exec(ls[i]);
     if (!m) continue;
 
-    // Only the call's *own* argument list is examined. The previous version
-    // took the first number within three lines, so a provider constant, a
-    // status code or a resource id could be reported as a 5 ms GPS interval.
+    // Only the call's *own* argument list is examined, and only the argument
+    // that actually is the interval:
     //
-    // Named constants are resolved because nobody writes the literal inline:
-    // `requestLocationUpdates(GPS_PROVIDER, UPDATE_INTERVAL_MS, ...)` is the
-    // normal shape, and reading only literals missed it.
+    //   requestLocationUpdates(provider, minTimeMs, minDistanceM, listener, …)
+    //   setInterval / setFastestInterval / setMinUpdateIntervalMillis(ms)
+    //
+    // Taking the first number in range instead mis-reads a correct call:
+    // `requestLocationUpdates(GPS_PROVIDER, 60000L, 5f, listener)` rejects the
+    // 60 000 ms interval as "slow enough" and then reports the 5 *metres*
+    // distance filter as a 5-second update rate. Position identifies the
+    // interval — the distance argument floats one slot later and is never read
+    // — and magnitude only classifies the value that position selected.
+    //
+    // Named constants are resolved inside that argument, because nobody writes
+    // the literal inline: `requestLocationUpdates(GPS_PROVIDER,
+    // UPDATE_INTERVAL_MS, ...)` is the normal shape, and reading only literals
+    // missed it.
     const raw = callArguments(ls.slice(i, i + 8).join(" "), m.index);
-    const args = raw.replace(/[A-Za-z_$][\w$]*/g, (id) =>
+    const args = splitArguments(raw);
+    const intervalArg = args[/^requestLocationUpdates/.test(m[0]) ? 1 : 0];
+    if (intervalArg === undefined) continue;
+
+    const resolved = intervalArg.replace(/[A-Za-z_$][\w$]*/g, (id) =>
       constants.has(id) ? String(constants.get(id)) : id
     );
-    let interval = -1;
+    const num = resolved.match(/\d[\d_]*(?:\.\d[\d_]*)?/);
+    if (!num) continue;
 
-    const numRe = /(\d[\d_]*)/g;
-    let n: RegExpExecArray | null;
-    while ((n = numRe.exec(args)) !== null) {
-      const value = Number(n[1].replace(/_/g, ""));
-      // A bare number under 30 is seconds rather than milliseconds; both
-      // readings sit below the 30-second floor this rule is about.
-      const ms = value > 0 && value < 30 ? value * 1000 : value;
-      if (ms > 0 && ms < 30_000) {
-        interval = ms;
-        break;
-      }
-    }
-    if (interval === -1) continue;
+    const value = Number(num[0].replace(/_/g, ""));
+    // A bare number under 30 is seconds rather than milliseconds; both
+    // readings sit below the 30-second floor this rule is about. Zero is a
+    // violation too: a minTime of 0 means "every fix the hardware delivers",
+    // which is the fastest interval of all, not the absence of one.
+    const interval = value > 0 && value < 30 ? Math.round(value * 1000) : Math.round(value);
+    if (interval < 0 || interval >= 30_000) continue;
 
     results.push(
       finding(
@@ -998,7 +1115,15 @@ function detectL03(f: FileContent): Finding[] {
 function detectL04(f: FileContent): Finding[] {
   const hasAccelerometer = /TYPE_ACCELEROMETER/.test(f.content);
   if (!hasAccelerometer) return [];
-  const hasStepKeyword = /step|pedometer|walk|pace|stride/i.test(f.content);
+  // The lookbehind anchors each keyword to a word start: without it `pace`
+  // matched inside `space` and `namespace`, so a file that merely *named* a
+  // namespace was reported as step-counting code. Grouping the alternation
+  // matters — written as `(?<![A-Za-z])step|pace|…` the anchor would bind
+  // only to `step`, and `pace` inside `namespace` would still match. A
+  // keyword that starts a word (`walk` in `walkthrough`, `step` in
+  // `stepListener`) still counts, which is the point of the anchor.
+  const hasStepKeyword =
+    /(?<![A-Za-z])(?:step|pedometer|walk|pace|stride)/i.test(f.content);
   if (!hasStepKeyword) return [];
   const line = firstMatchLine(f.content, /TYPE_ACCELEROMETER/);
   return [
@@ -1017,7 +1142,7 @@ function detectL04(f: FileContent): Finding[] {
 }
 
 // L05 — Geofencing via polling
-function detectL05(files: FileContent[], f: FileContent): Finding[] {
+function detectL05(facts: ProjectFacts, f: FileContent): Finding[] {
   // Polling means a *loop that re-arms*, not the mere presence of a Handler:
   // a Handler next to a location callback is ordinary UI plumbing. Requiring a
   // real repeating schedule is what separates the two.
@@ -1032,10 +1157,7 @@ function detectL05(files: FileContent[], f: FileContent): Finding[] {
       f.content
     );
   if (!hasDistanceCalc) return [];
-  const projectHasGeofence = files.some((fi) =>
-    /GeofencingClient|Geofence\.Builder|addGeofences/.test(fi.content)
-  );
-  if (projectHasGeofence) return [];
+  if (facts.hasGeofencing) return [];
   const line = firstMatchLine(f.content, /requestLocationUpdates/);
   return [
     finding(
@@ -1086,7 +1208,7 @@ function detectA01(f: FileContent): Finding[] {
 }
 
 // A02 — Deferrable work using raw Service
-function detectA02(files: FileContent[], f: FileContent): Finding[] {
+function detectA02(facts: ProjectFacts, f: FileContent): Finding[] {
   const isService =
     /extends\s+(Service|IntentService)\b|:\s*(Service|IntentService)\s*\(/.test(
       f.content
@@ -1096,15 +1218,19 @@ function detectA02(files: FileContent[], f: FileContent): Finding[] {
   // is driven by its client's lifecycle. "Deferrable" describes neither.
   if (/startForeground\s*\(/.test(f.content)) return [];
   if (isBoundService(f.content)) return [];
+  // Anchored to a word start for the same reason as L04's keywords: the first
+  // version matched `sync` inside `async`, so any Service with a coroutine or
+  // a `runAsync()` helper was "deferrable work". Keyword-at-a-word-start still
+  // fires where it must — `sync` at the head of `SyncService.java`, `upload`
+  // at the head of `UploadService.java` — because what precedes the keyword
+  // there is a path separator or whitespace, not a letter inside a longer
+  // word.
   const isDeferrableWork =
-    /sync|upload|backup|analytics|report|flush/i.test(
+    /(?<![A-Za-z])(?:sync|upload|backup|analytics|report|flush)/i.test(
       f.path + " " + f.content.slice(0, 500)
     );
   if (!isDeferrableWork) return [];
-  const projectHasWorkManager = files.some((fi) =>
-    /WorkManager|Worker\b|CoroutineWorker/.test(fi.content)
-  );
-  if (projectHasWorkManager) return [];
+  if (facts.hasWorkManager) return [];
   const line = firstMatchLine(f.content, /onStartCommand|onHandleIntent/);
   if (line === -1) return [];
   return [
@@ -1123,20 +1249,18 @@ function detectA02(files: FileContent[], f: FileContent): Finding[] {
 }
 
 // A03 — JobScheduler ignored for background sync
-function detectA03(files: FileContent[], f: FileContent): Finding[] {
-  const submits = (content: string): boolean =>
-    /\.schedule\s*\(|WorkManager\s*\.\s*getInstance\s*\(|\.enqueue\s*\(\s*\w*(?:Request|Work)/.test(
-      content
-    );
-
+function detectA03(facts: ProjectFacts, f: FileContent): Finding[] {
   // Shape 1 — constraints written and never submitted. A JobInfo built with
   // `setPeriodic`/`setRequiredNetworkType` and no `schedule()` anywhere in the
   // project is the most explicit form of this defect: the author knew what to
   // do, and the submission never happened. The constraints are dead code, so
   // the work that was supposed to be deferred runs unconstrained instead.
+  // Whether the project submits anything is a project-level fact, computed
+  // once per analysis rather than re-scanned for every file that builds a
+  // JobInfo.
   if (
     /new\s+JobInfo\.Builder\s*\(/.test(f.content) &&
-    !files.some((fi) => submits(fi.content))
+    !facts.submitsWork
   ) {
     const line = firstMatchLine(f.content, /new\s+JobInfo\.Builder\s*\(/);
     return [
@@ -1166,10 +1290,7 @@ function detectA03(files: FileContent[], f: FileContent): Finding[] {
     f.content
   );
   if (hasConstraints) return [];
-  const projectHasWorkManager = files.some((fi) =>
-    /WorkManager|JobScheduler/.test(fi.content)
-  );
-  if (projectHasWorkManager) return [];
+  if (facts.hasJobSchedulerOrWorkManager) return [];
   const line = firstMatchLine(f.content, HTTP_CLIENT_CONSTRUCTED);
   return [
     finding(
@@ -1496,6 +1617,11 @@ export function analyzeProject(files: FileContent[]): Finding[] {
   const suppressions = new Map<string, Suppressions>();
   for (const f of files) suppressions.set(f.path, collectSuppressions(f.content));
 
+  // Project-wide questions are answered once, before the per-file loop: the
+  // four detectors that used to run `files.some(...)` per file would have
+  // re-scanned every file once per candidate finding.
+  const facts = projectFacts(scan);
+
   for (const f of scan) {
     results.push(...detectW01(f));
     results.push(...detectW02(f));
@@ -1509,17 +1635,17 @@ export function analyzeProject(files: FileContent[]): Finding[] {
     results.push(...detectN03(f));
     results.push(...detectN04(f));
     results.push(...detectN05(f));
-    results.push(...detectN06(scan, f));
+    results.push(...detectN06(facts, f));
 
     results.push(...detectL01(f));
     results.push(...detectL02(f));
     results.push(...detectL03(f));
     results.push(...detectL04(f));
-    results.push(...detectL05(scan, f));
+    results.push(...detectL05(facts, f));
 
     results.push(...detectA01(f));
-    results.push(...detectA02(scan, f));
-    results.push(...detectA03(scan, f));
+    results.push(...detectA02(facts, f));
+    results.push(...detectA03(facts, f));
     results.push(...detectA04(f));
     results.push(...detectA05(f));
     results.push(...detectA06(f));

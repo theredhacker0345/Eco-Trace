@@ -15,7 +15,8 @@ import { BobClient, BobError, formatCost } from "../bob/client.js";
 import { proposeAiFix, type AiFixPatch } from "../bob/aifix.js";
 import { log } from "../ui/runLog.js";
 import { notify } from "../ui/toasts.js";
-import { qs, qsButton } from "./dom.js";
+import { esc, qs, qsButton } from "./dom.js";
+import { isHostedBuild } from "./shell.js";
 import { relPath } from "../ui/format.js";
 import { selectedFinding, state } from "../ui/store.js";
 import type { Finding } from "../analyzer/static.js";
@@ -167,6 +168,16 @@ async function runApply(): Promise<void> {
     return;
   }
 
+  // `invoke` reaches the Tauri IPC bridge, which does not exist outside the
+  // desktop shell. Every other call site checks this first — without it the
+  // button fails with a raw `TypeError` from inside the plugin instead of an
+  // explanation.
+  if (isHostedBuild()) {
+    log("system", "Applying a patch needs the EcoTrace desktop app.");
+    notify("info", "Desktop app required", "Applying a patch runs git against a local repository.");
+    return;
+  }
+
   stage = "applying";
   render();
 
@@ -193,9 +204,12 @@ async function runApply(): Promise<void> {
       ]
         .filter(Boolean)
         .join("\n"),
-      // The verifier is the project's own type check. It is the one command that
-      // is cheap, always available, and catches a patch that does not compile.
-      verifyCommand: "npx tsc --noEmit",
+      // The verifier is a command the user can change in Settings — the
+      // project's own type check by default, because it is the one command
+      // that is cheap, always available, and catches a patch that does not
+      // compile. An empty value disables verification entirely: `null` maps to
+      // `verify_command: Option<String>` on the Rust side, which skips it.
+      verifyCommand: state.settings.verifyCommand.trim() || null,
       push: PUSH_BRANCH_BY_DEFAULT,
     });
 
@@ -306,11 +320,4 @@ function branchNameLabel(file: string): string {
     .toLowerCase()
     .slice(0, 24);
   return `a branch (${BRANCH_PREFIX}/…${slug ? `/${slug}` : ""})`;
-}
-
-function esc(value: string): string {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }

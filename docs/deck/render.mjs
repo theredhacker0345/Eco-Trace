@@ -1,13 +1,17 @@
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // Renders docs/deck/deck.html to a 16:9 PDF and a 16:9 cover PNG.
 // IBM Plex is referenced but not embedded; the renderer resolves it from the
 // system-installed face, which is present on this machine, and falls back
 // gracefully to the metric-compatible sans stack otherwise.
-const DECK = 'C:/Users/urooj/Videos/eco trace/docs/deck/deck.html';
-const OUT_PDF = 'C:/Users/urooj/Videos/eco trace/docs/deck/EcoTrace-pitch-deck.pdf';
-const OUT_PNG = 'C:/Users/urooj/Videos/eco trace/assets/cover.png';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, '..', '..');
+const DECK = resolve(ROOT, 'docs', 'deck', 'deck.html');
+const OUT_PDF = resolve(ROOT, 'docs', 'deck', 'EcoTrace-pitch-deck.pdf');
+const OUT_PNG = resolve(ROOT, 'assets', 'cover.png');
 
 const html = readFileSync(DECK, 'utf8');
 

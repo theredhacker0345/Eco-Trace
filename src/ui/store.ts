@@ -104,11 +104,6 @@ export function selectedFinding(): Finding | null {
   return findings[selectedIndex];
 }
 
-/** Absolute path of the finding currently under inspection, if any. */
-export function selectedFindingFile(): string | null {
-  return selectedFinding()?.file ?? null;
-}
-
 export function countBySeverity(
   findings: readonly Finding[]
 ): Record<LogLevel, number> {
@@ -127,7 +122,7 @@ export function countBySeverity(
   return tally;
 }
 
-export type SortKey = "severity" | "pattern" | "file" | "category";
+export type SortKey = "severity" | "pattern" | "patternId" | "file" | "category";
 
 const SEVERITY_RANK: Record<string, number> = { Critical: 0, High: 1, Medium: 2 };
 
@@ -155,6 +150,12 @@ export function sortFindings(key: SortKey, ascending: boolean): void {
         break;
       case "pattern":
         delta = a.patternName.localeCompare(b.patternName);
+        break;
+      case "patternId":
+        // The Rule column: rule ids sort as written (W01 before N02), and the
+        // line tiebreak keeps two hits of the same rule in source order.
+        delta = a.patternId.localeCompare(b.patternId);
+        if (delta === 0) delta = a.line - b.line;
         break;
       case "category":
         delta = a.category.localeCompare(b.category);

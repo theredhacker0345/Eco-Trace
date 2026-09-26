@@ -74,6 +74,35 @@ export class BobError extends Error {
 }
 
 /**
+ * The message a user cancel carries, so the retry loop can recognise a
+ * cancellation it did not construct itself.
+ *
+ * A cancel is never retryable: the caller asked the request to stop, and the
+ * signal that stopped it is spent — a retried request could not be cancelled
+ * again, because `addEventListener("abort")` on an already-fired signal never
+ * fires. Reporting a cancel as a retryable "timed out" is how a cancelled
+ * request used to be re-issued up to three times.
+ */
+const CANCELLED_MESSAGE = "Request cancelled";
+
+function cancelledError(): BobError {
+  return new BobError(
+    0,
+    CANCELLED_MESSAGE,
+    "Cancelled before IBM Bob responded.",
+    false
+  );
+}
+
+/** True for both a raw AbortError and the non-retryable cancel BobError. */
+function isCancellation(err: unknown): boolean {
+  if (err instanceof DOMException && err.name === "AbortError") return true;
+  return (
+    err instanceof BobError && !err.retryable && err.message === CANCELLED_MESSAGE
+  );
+}
+
+/**
  * Cost per million tokens, in USD.
  *
  * Deliberately a table the user can see and correct rather than a constant
@@ -219,10 +248,12 @@ export class BobClient {
    * failure and mean opposite things to the person holding the key.
    */
   async listModels(apiKey: string, signal?: AbortSignal): Promise<string[]> {
+    // No retry knob here or in rawFetch: retries belong to the caller, and
+    // `retries: 1` used to be passed and silently ignored.
     const response = await this.rawFetch(
       `${this.baseUrl}/models`,
       { method: "GET", headers: { Authorization: `Bearer ${apiKey}` } },
-      { timeoutMs: 20_000, retries: 1, signal }
+      { timeoutMs: 20_000, signal }
     );
     const data = (await response.json()) as { data?: Array<{ id?: string }> };
     return (data.data ?? []).map((m) => m.id ?? "").filter(Boolean);
@@ -238,6 +269,10 @@ export class BobClient {
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      // Check before every attempt, not only when fetch throws: a cancel that
+      // lands during the backoff sleep must stop the sequence there, rather
+      // than start a round trip the caller has already asked to end.
+      if (request.signal?.aborted) throw cancelledError();
       attempts++;
       try {
         const response = await this.rawFetch(
@@ -259,7 +294,6 @@ export class BobClient {
           },
           {
             timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
-            retries: 0,
             signal: request.signal,
           }
         );
@@ -286,10 +320,14 @@ export class BobClient {
         return { text, usage, attempts, retried: attempt > 0 };
       } catch (err) {
         lastError = err;
+        // A cancellation is terminal — rethrow it as it is (raw AbortError or
+        // the non-retryable BobError) instead of converting it into retries.
+        if (isCancellation(err)) throw err;
+        // The signal may also have fired while we were reading the response or
+        // sleeping between attempts; that is a cancel too, never a retry.
+        if (request.signal?.aborted) throw cancelledError();
         const retryable = err instanceof BobError ? err.retryable : false;
-        const cancelled = err instanceof DOMException && err.name === "AbortError";
 
-        if (cancelled) throw err;
         if (!retryable || attempt === this.maxRetries) break;
 
         await sleep(backoffMs(attempt, err));
@@ -305,8 +343,13 @@ export class BobClient {
   private async rawFetch(
     url: string,
     init: RequestInit,
-    opts: { timeoutMs: number; retries: number; signal?: AbortSignal }
+    opts: { timeoutMs: number; signal?: AbortSignal }
   ): Promise<Response> {
+    // An already-fired signal would never trigger the `onAbort` listener
+    // below, so the request would start out unable to be cancelled. Refuse it
+    // up front instead — non-retryably, like every other cancel.
+    if (opts.signal?.aborted) throw cancelledError();
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
 
@@ -366,6 +409,12 @@ export class BobClient {
     } catch (err) {
       if (err instanceof BobError) throw err;
       if (err instanceof DOMException && err.name === "AbortError") {
+        // Both the timeout timer and the caller's cancel surface here as
+        // AbortError — fetch cannot tell them apart, but the retry logic must.
+        // A timeout is worth retrying; a user cancel must never be, and
+        // reporting it as a retryable "timed out" is what used to re-issue a
+        // cancelled request (with a signal that could no longer stop it).
+        if (opts.signal?.aborted) throw cancelledError();
         throw new BobError(
           0,
           "The request timed out",

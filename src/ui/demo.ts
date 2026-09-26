@@ -26,7 +26,8 @@
  *     user without a key sees in the desktop app.
  *
  * In the Tauri build this module is never reached, because
- * `isDesktopShell()` is false and the real folder picker takes over.
+ * `isDesktopShell()` (./shell.js) is true and the real folder picker takes
+ * over.
  */
 
 import { buildCallGraph, traceCallChain, analyzeProject } from "../analyzer/static.js";
@@ -94,16 +95,6 @@ const FIXTURES: ReadonlyArray<readonly [name: string, content: string]> = [
 /** The application id the drain measurement would target, from the manifest. */
 const DEMO_PACKAGE = "com.northwind.tracker";
 
-/** True inside the Tauri shell, where the real folder picker is available. */
-export function isDesktopShell(): boolean {
-  return "__TAURI_INTERNALS__" in window;
-}
-
-/** True when this build is being served as a hosted demo. */
-export function isDemoMode(): boolean {
-  return !isDesktopShell();
-}
-
 function demoFiles(): FileContent[] {
   return FIXTURES.map(([name, content]) => ({
     path: `${DEMO_ROOT}\\${name}`,
@@ -116,8 +107,8 @@ function demoFiles(): FileContent[] {
  * Mounts the demo project and runs a real analysis over it.
  *
  * Runs the detectors on the calling thread rather than through the worker: the
- * demo set is ten files, and a worker round-trip would add latency to the one
- * path where the judge's first impression is the wait.
+ * demo set is seventeen files, and a worker round-trip would add latency to
+ * the one path where the judge's first impression is the wait.
  */
 export async function mountDemoMode(): Promise<void> {
   const files = demoFiles();

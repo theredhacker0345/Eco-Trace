@@ -93,9 +93,15 @@ function applySort(key: SortKey, ascending: boolean): void {
   sortAsc = ascending;
   sortFindings(key, ascending);
 
+  // Only mirror the key into the toolbar select when the select actually
+  // offers it. `patternId` (the Rule header) has no option there, and
+  // assigning a value no `<option>` carries blanks the control.
   const select = qs<HTMLSelectElement>("input-sort");
-  if (select.value !== key) select.value = key;
+  const offered = Array.from(select.options).some((option) => option.value === key);
+  if (offered && select.value !== key) select.value = key;
 
+  // `data-sort` is unique per header, so exactly one column ever carries a
+  // directional aria-sort and the rest are reset to "none".
   for (const th of qsa<HTMLElement>("th[data-sort]")) {
     th.setAttribute(
       "aria-sort",
@@ -427,10 +433,17 @@ function toggleSort(key: SortKey): void {
 export function resetFilters(): void {
   query = "";
   scope = "all";
-  for (const severity of activeSeverities) activeSeverities.add(severity);
+
+  // Restore the full severity set. The previous loop iterated the live set and
+  // re-added what was already in it — a no-op — so severities the user had
+  // switched off stayed off, and the empty-state "Reset filters" action
+  // changed nothing while claiming to.
+  for (const severity of ["critical", "high", "medium"]) activeSeverities.add(severity);
   for (const chip of qsa<HTMLElement>("#severity-filters .cx-filter")) {
-    chip.setAttribute("aria-pressed", "true");
+    const severity = (chip.dataset.severity ?? "").toLowerCase();
+    chip.setAttribute("aria-pressed", String(activeSeverities.has(severity)));
   }
+
   const search = qs<HTMLInputElement>("input-findings-search");
   search.value = "";
   qs("btn-findings-search-clear").hidden = true;
@@ -489,16 +502,30 @@ export function initFindingsTable(): void {
     }
 
     const expandBtn = target.closest<HTMLElement>(".cx-expand");
+
+    // The actions in the expanded detail row live on `.cx-table__detail`, not
+    // on `.cx-table__row`, so they have to be matched before the row lookup —
+    // which is what made them inert: the row lookup below returned null and
+    // the handler bailed out.
+    const reveal = target.closest<HTMLElement>("[data-reveal-file]");
+    if (reveal?.dataset.revealFile) {
+      document.dispatchEvent(
+        new CustomEvent("ecotrace:reveal-file", { detail: reveal.dataset.revealFile })
+      );
+      return;
+    }
+
+    const openInspector = target.closest<HTMLElement>("[data-open-inspector]");
+    if (openInspector) {
+      selectByIndex(Number(openInspector.dataset.openInspector), false);
+      return;
+    }
+
     const row = target.closest<HTMLElement>(".cx-table__row");
     if (!row) return;
 
     if (expandBtn) {
       toggleRow(row);
-      return;
-    }
-
-    if (target.closest("[data-open-inspector]")) {
-      selectByIndex(Number(row.dataset.index), false);
       return;
     }
 

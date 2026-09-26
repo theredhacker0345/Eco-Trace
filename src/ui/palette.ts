@@ -12,9 +12,10 @@
  * drift apart.
  */
 
-import { esc, icon, qs } from "./dom.js";
+import { esc, qs } from "./dom.js";
 import { fuzzyMatch, relPath } from "./format.js";
 import { trapFocus, type FocusTrap } from "./focus.js";
+import { resumeLanding, suspendLanding } from "./modals.js";
 import { state } from "./store.js";
 
 export interface Command {
@@ -56,6 +57,9 @@ export function openPalette(): void {
   const field = input();
   field.value = "";
   refresh();
+  // Only one surface may hold Tab at a time; the landing overlay gives the
+  // keyboard up while the palette is on screen.
+  suspendLanding();
   trap = trapFocus(root);
 }
 
@@ -65,6 +69,7 @@ export function closePalette(): void {
   trap?.release();
   trap = null;
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  resumeLanding();
 }
 
 function matches(command: Command, needle: string): boolean {
@@ -203,5 +208,3 @@ export function fileCommands(onPick: (absPath: string) => void): Command[] {
     };
   });
 }
-
-export { icon };

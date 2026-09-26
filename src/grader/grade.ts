@@ -196,8 +196,12 @@ async function historyDirPath(): Promise<string> {
 /**
  * Persists a new ScanRecord, prepending it to the history file (newest-first).
  * Creates the directory if it does not exist.
+ *
+ * Returns false when the record could not be written. A scan that silently
+ * failed to save is a hole in the timeline nobody can see, so the failure is
+ * both reported here and warned about rather than swallowed.
  */
-export async function saveScan(record: ScanRecord): Promise<void> {
+export async function saveScan(record: ScanRecord): Promise<boolean> {
   try {
     const existing = await loadHistory();
     const updated = [record, ...existing];
@@ -210,14 +214,21 @@ export async function saveScan(record: ScanRecord): Promise<void> {
 
     const filePath = await historyFilePath();
     await writeTextFile(filePath, JSON.stringify(updated, null, 2));
-  } catch {
-    // Silently swallow write errors to avoid crashing the scan pipeline
+    return true;
+  } catch (err) {
+    // Do not crash the scan pipeline over history — but do not pretend the
+    // write happened either: the caller gets false and the console says why.
+    console.warn("EcoTrace: could not save this scan to history.", err);
+    return false;
   }
 }
 
 /**
  * Loads the full scan history, sorted newest-first.
- * Returns [] if the file is missing or cannot be parsed.
+ * Returns [] if the file is missing or cannot be read or parsed — a missing
+ * file is normal on first run, while a parse failure means existing history is
+ * being dropped, so that one is warned about before the empty list is handed
+ * back.
  */
 export async function loadHistory(): Promise<ScanRecord[]> {
   try {
@@ -227,35 +238,9 @@ export async function loadHistory(): Promise<ScanRecord[]> {
     const raw = await readTextFile(filePath);
     const parsed = JSON.parse(raw) as ScanRecord[];
     return parsed.sort((a, b) => b.timestamp - a.timestamp);
-  } catch {
+  } catch (err) {
+    console.warn("EcoTrace: scan history could not be read; starting empty.", err);
     return [];
   }
 }
 
-// ---------------------------------------------------------------------------
-// Progress timeline
-// ---------------------------------------------------------------------------
-
-/**
- * Converts a history array into an array of ProgressPoints suitable for
- * timeline rendering, sorted oldest-first.
- *
- * Each point carries the delta (score change) relative to the previous scan.
- */
-export function computeScoreProgress(history: ScanRecord[]): ProgressPoint[] {
-  // Work oldest-first internally so deltas are forward-looking
-  const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp);
-
-  return sorted.map((record, index) => {
-    const prevScore = index === 0 ? record.grade.numericScore : sorted[index - 1].grade.numericScore;
-    const delta = index === 0 ? 0 : record.grade.numericScore - prevScore;
-
-    return {
-      timestamp: record.timestamp,
-      date: new Date(record.timestamp).toISOString(),
-      numericScore: record.grade.numericScore,
-      letter: record.grade.letter,
-      delta,
-    };
-  });
-}

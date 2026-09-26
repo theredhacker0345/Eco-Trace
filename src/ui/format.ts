@@ -14,11 +14,6 @@ export function fileName(absPath: string): string {
   return parts.length ? parts[parts.length - 1] : absPath;
 }
 
-export function fileDir(absPath: string): string {
-  const parts = absPath.split(SEP).filter(Boolean);
-  return parts.slice(0, -1).join("/") || ".";
-}
-
 export function fileExt(absPath: string): string {
   const name = fileName(absPath);
   const dot = name.lastIndexOf(".");
@@ -37,16 +32,6 @@ export function relPath(absPath: string, projectPath: string | null): string {
   return absPath;
 }
 
-export function pathDir(rel: string): string {
-  const idx = rel.lastIndexOf("/");
-  return idx > 0 ? rel.slice(0, idx) : "";
-}
-
-export function baseName(rel: string): string {
-  const idx = rel.lastIndexOf("/");
-  return idx >= 0 ? rel.slice(idx + 1) : rel;
-}
-
 export function locationLabel(
   absPath: string,
   line: number,
@@ -57,14 +42,6 @@ export function locationLabel(
 
 export function clockTime(when = new Date()): string {
   return when.toLocaleTimeString("en-GB", { hour12: false });
-}
-
-export function shortDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 export function dateTime(ts: number): string {
@@ -94,12 +71,4 @@ export function fuzzyMatch(haystack: string, needle: string): boolean {
     i = found + 1;
   }
   return true;
-}
-
-/** "apple" from "src/main/java/com/demo/apple/Foo.kt" — the folder above the file. */
-export function packageOf(absPath: string, projectPath: string | null): string {
-  const rel = relPath(absPath, projectPath);
-  const dir = pathDir(rel);
-  const parts = dir.split("/").filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : "root";
 }

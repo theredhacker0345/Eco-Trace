@@ -258,6 +258,35 @@ const CLEAN = [
     path: "src/test/java/com/example/CaseTest.java",
     code: java("  void f(PowerManager.WakeLock wl) {\n    wl.acquire();\n  }"),
   },
+  {
+    // The interval is the 2nd argument; `5f` is the *distance* filter. Reading
+    // the first number under 30 000 used to report that 5 metres as a
+    // 5-second GPS interval on an otherwise correct 60 s registration.
+    // L02 still fires here (GPS_PROVIDER is a FINE request), so this case
+    // asserts absence of L01 rather than total silence.
+    name: "requestLocationUpdates(GPS_PROVIDER, 60000L, 5f, …) is not L01",
+    absent: ["L01"],
+    code: java(
+      "  void f() {\n    lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 60000L, 5f, listener);\n    lm.removeUpdates(listener);\n  }"
+    ),
+  },
+  {
+    // `pace` used to match inside `namespace`, so naming a namespace in a file
+    // that reads the accelerometer was reported as step-counting code.
+    name: "`namespace` is not the step-counting keyword",
+    code: java(
+      '  static final int TYPE_ACCELEROMETER = 1;\n  String namespace = "layout";'
+    ),
+  },
+  {
+    // `sync` used to match inside `async`, so any Service with an async helper
+    // was "deferrable sync work". Every other precondition of A02 holds here —
+    // raw Service, stopSelf present, no foreground, no WorkManager — so the
+    // keyword gate is the only thing keeping this file silent.
+    name: "`async` in a raw Service is not deferrable sync work",
+    code:
+      "package com.example;\n\npublic class Case extends Service {\n  public int onStartCommand(Intent i, int f, int s) {\n    boolean async = isAsync();\n    stopSelf(s);\n    return START_NOT_STICKY;\n  }\n}\n",
+  },
 ];
 
 console.log("\nclean patterns (must produce nothing)");
@@ -265,10 +294,16 @@ for (const [i, c] of CLEAN.entries()) {
   const findings = analyzeProject([
     { path: c.path ?? `case-${i}.java`, content: c.code, language: "java" },
   ]);
+  // Cases whose subject rule is named in `absent` tolerate incidental findings
+  // for rules this snippet genuinely violates (GPS_PROVIDER is a FINE request);
+  // they still fail loudly if the rule under test fires at all.
+  const hits = c.absent
+    ? findings.filter((f) => c.absent.includes(f.patternId))
+    : findings;
   report(
-    findings.length === 0,
+    hits.length === 0,
     c.name,
-    findings.map((f) => `${f.patternId}:${f.line}`).join(", ")
+    hits.map((f) => `${f.patternId}:${f.line}`).join(", ")
   );
 }
 
@@ -341,6 +376,26 @@ const STILL_CAUGHT = [
     rule: "N01",
     code: java(
       "  void f(final Handler h, OkHttpClient c) {\n    Runnable retry = new Runnable() {\n      public void run() {\n        c.newCall(req).execute();\n        h.postDelayed(this, 5000);\n      }\n    };\n    h.postDelayed(retry, 5000);\n  }"
+    ),
+  },
+  {
+    // `policy` is not a rule id, so it must not be read as a wildcard that
+    // silences the line under the comment.
+    name: "an unrecognised token after ecotrace-ignore silences nothing on the next line",
+    rule: "N02",
+    code: java(
+      "  void f() {\n    // see ecotrace-ignore policy\n    OkHttpClient c = new OkHttpClient();\n  }"
+    ),
+  },
+  {
+    // Same, but the finding sits on the comment's own line: this is the shape
+    // where the old wildcard-for-unrecognised-tokens bug actually hid a
+    // finding (the next-line case above is also covered by exact-line
+    // suppression alone).
+    name: "an unrecognised token after an inline ecotrace-ignore silences nothing",
+    rule: "N02",
+    code: java(
+      "  void f() {\n    OkHttpClient c = new OkHttpClient(); // see ecotrace-ignore policy\n  }"
     ),
   },
 ];

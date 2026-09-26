@@ -129,6 +129,7 @@ function chainMarkup(finding: Finding): string {
     .join("");
 }
 
+/** The `rule|file|line` key of the finding the inspector last rendered. */
 let lastRenderedIdentity: string | null = null;
 
 function render(): void {
@@ -139,8 +140,14 @@ function render(): void {
   // A proposed patch belongs to the finding it was proposed for. Without this,
   // stepping to the next finding leaves a verified patch and its cost sitting
   // under a completely different rule, and the Apply button would write it.
-  if (finding?.patternId !== lastRenderedIdentity) {
-    lastRenderedIdentity = finding ? `${finding.patternId}|${finding.file}|${finding.line}` : null;
+  //
+  // Both sides of the comparison are the full `rule|file|line` identity —
+  // comparing a bare `patternId` against that key made them unequal on every
+  // render, so `resetAiFix()` fired each time and wiped a proposed or
+  // verified patch (and its cost) on any re-render at all.
+  const nextIdentity = finding ? identity(finding) : null;
+  if (nextIdentity !== lastRenderedIdentity) {
+    lastRenderedIdentity = nextIdentity;
     resetAiFix();
   }
 

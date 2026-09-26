@@ -663,12 +663,12 @@
 }
 
 .cx-log__line[data-level='success'] {
-  border-left-color: var(--cx-support-success);
+  border-left-color: var(--cx-success);
 }
 
 .cx-log__line[data-level='success'] .cx-log__level,
 .cx-log__line[data-level='success'] .cx-log__msg {
-  color: var(--cx-support-success);
+  color: var(--cx-success);
 }
 
 .cx-log__line[data-level='info'] {
@@ -758,7 +758,7 @@
 }
 
 .cx-history__delta[data-dir='up'] {
-  color: var(--cx-support-success);
+  color: var(--cx-success);
 }
 
 .cx-history__delta[data-dir='down'] {

@@ -24,6 +24,12 @@ export interface AnalysisResult {
 
 export interface AnalysisRequest {
   type: "analyze";
+  /**
+   * Echoed back with the result. The worker is pooled and can have more than
+   * one scan in flight, so the response id is what lets the runner's promise
+   * pick out its own answer instead of settling on the first one to arrive.
+   */
+  id: number;
   files: FileContent[];
 }
 
@@ -49,16 +55,38 @@ export function analyzeInProcess(files: FileContent[]): AnalysisResult {
   return { findings, chains, elapsedMs: Math.round(performance.now() - started) };
 }
 
-self.addEventListener("message", (event: MessageEvent<AnalysisRequest>) => {
-  const request = event.data;
-  if (!request || request.type !== "analyze") return;
-  try {
-    const result = analyzeInProcess(request.files);
-    (self as unknown as Worker).postMessage({ ok: true, result });
-  } catch (err) {
-    (self as unknown as Worker).postMessage({
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
+/**
+ * Registered only inside a real worker scope.
+ *
+ * runner.ts dynamically imports this module on the *main* thread to reach
+ * `analyzeInProcess` for the inline fallback. At module scope that used to
+ * attach the listener to `window`, where any `window.postMessage({type:
+ * "analyze"})` — a dev-tool nudge, an extension, an unrelated page script —
+ * would kick off a full analysis on the UI thread. The export stays available
+ * to the fallback; only the listener is worker-only.
+ *
+ * The canonical test is `typeof WorkerGlobalScope !== "undefined" && self
+ * instanceof WorkerGlobalScope`, but this project's tsconfig lib is DOM-only
+ * and `WorkerGlobalScope` is declared in lib.webworker, so it is not a name
+ * TypeScript knows here. The equivalent, typed test: a worker global has
+ * `self` and no `document`, a window has both.
+ */
+const inWorkerScope =
+  typeof self !== "undefined" && typeof self.document === "undefined";
+
+if (inWorkerScope) {
+  self.addEventListener("message", (event: MessageEvent<AnalysisRequest>) => {
+    const request = event.data;
+    if (!request || request.type !== "analyze") return;
+    try {
+      const result = analyzeInProcess(request.files);
+      (self as unknown as Worker).postMessage({ ok: true, id: request.id, result });
+    } catch (err) {
+      (self as unknown as Worker).postMessage({
+        ok: false,
+        id: request.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+}

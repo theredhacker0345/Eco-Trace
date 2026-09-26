@@ -197,18 +197,3 @@ function chordOf(shortcut: Shortcut): string {
   parts.push(shortcut.key.length === 1 ? shortcut.key.toLowerCase() : shortcut.key);
   return parts.join("+");
 }
-
-export { focusable, isTypingTarget };
-
-/** Renders a shortcut as a kbd chip group. */
-export function kbdHtml(label: string): string {
-  return label
-    .split("+")
-    .map((part) => `<kbd>${part}</kbd>`)
-    .join("");
-}
-
-/** Focuses the first focusable element inside a container, if there is one. */
-export function focusFirst(root: ParentNode): void {
-  focusable(root)[0]?.focus();
-}

@@ -75,34 +75,39 @@ export interface WriteReportOptions {
 /**
  * Writes the report and opens it in the way the format calls for.
  *
- * Returns the path written, or null when the user cancelled.
- */
-/**
- * Writes the report and opens it in the way the format calls for.
- *
  * Returns the path written, or null when the user cancelled. In a browser —
  * that is, in the hosted demo — there is no filesystem and no save dialog, so
  * the document is delivered as a download instead and null is returned only if
  * the download itself is unavailable.
+ *
+ * `format: "pdf"` is refused rather than honoured: the report body this
+ * function writes is always HTML, so accepting a .pdf path would put markup
+ * in a file the reader's PDF viewer cannot open — worse than no file at all.
+ * PDF has exactly one route out of here, the host print pipeline in
+ * `printToPdf`, and it is the caller's job to take it.
  */
 export async function writeReport(
   options: WriteReportOptions
 ): Promise<string | null> {
+  if (options.format === "pdf") {
+    throw new Error(
+      "EcoTrace writes HTML, not PDF bytes; export PDF through printToPdf() instead of writeReport({ format: \"pdf\" })."
+    );
+  }
+
   if (!("__TAURI_INTERNALS__" in window)) {
     return downloadInBrowser(options.html, `${options.suggestedName}.html`);
   }
 
-  const extension = options.format;
-
   const target =
     options.target ??
     (await saveDialog({
-      title: `Export EcoTrace report as ${extension.toUpperCase()}`,
-      defaultPath: `${options.suggestedName}.${extension}`,
+      title: "Export EcoTrace report as HTML",
+      defaultPath: `${options.suggestedName}.html`,
       filters: [
         {
-          name: extension === "pdf" ? "PDF document" : "HTML report",
-          extensions: [extension],
+          name: "HTML report",
+          extensions: ["html"],
         },
       ],
     }));

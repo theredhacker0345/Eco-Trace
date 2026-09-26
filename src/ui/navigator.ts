@@ -13,7 +13,7 @@
  */
 
 import type { Finding } from "../analyzer/static.js";
-import { esc, icon, qs, qsa } from "./dom.js";
+import { esc, qs, qsa } from "./dom.js";
 import { fileExt, fileName, relPath } from "./format.js";
 import { countBySeverity, emit, state, subscribe } from "./store.js";
 
@@ -113,9 +113,15 @@ function dirLabel(dir: string): string {
 }
 
 function fileMarkup(file: TreeFile): string {
-  const selected = state.selectedFile === file.path || state.selectedIndex >= 0
-    ? file.path === (state.findings[state.selectedIndex]?.file ?? "")
-    : false;
+  // Two ways for a file to be highlighted, and neither excludes the other:
+  // the scope the user picked, or the file behind the selected finding. The
+  // previous expression was `a || b ? c : false`, which — because `?:` binds
+  // looser than `||` — dropped the scope comparison entirely as soon as any
+  // finding was selected.
+  const selected =
+    state.selectedFile === file.path ||
+    (state.selectedIndex >= 0 &&
+      file.path === state.findings[state.selectedIndex]?.file);
   const count = file.count
     ? `<span class="cx-tree__n">${file.count}</span>`
     : "";
@@ -198,6 +204,30 @@ function syncSelection(): void {
     row.dataset.selected = String(isActive || isScoped);
     row.setAttribute("aria-current", String(isScoped));
   }
+}
+
+/**
+ * Resolves either form of path to an indexed file: absolute or
+ * project-relative.
+ *
+ * Every dispatcher sends an absolute path — the findings table and the
+ * inspector's chain hops — while the branch below used to compare only
+ * project-relative paths, so it matched nothing in practice and the reveal
+ * fell through to `main.ts`. Stripping the project root and normalising the
+ * separators on both sides makes the two forms interchangeable instead of
+ * picking one and hoping.
+ */
+function resolveFile(candidate: string): string | null {
+  const root = (state.projectPath ?? "").replace(/[\\/]+$/, "").replace(/\\/g, "/");
+  const normalise = (value: string): string => {
+    const slashed = value.replace(/\\/g, "/");
+    const prefix = root ? `${root}/` : "";
+    return prefix && slashed.startsWith(prefix) ? slashed.slice(prefix.length) : slashed;
+  };
+
+  const target = normalise(candidate);
+  if (!target) return null;
+  return state.files.find((file) => normalise(file.path) === target)?.path ?? null;
 }
 
 /** Reveals a file in the tree: expands its directory and focuses the row. */
@@ -356,11 +386,9 @@ export function initNavigator(): void {
   listEl.addEventListener("keydown", onKeydown);
 
   document.addEventListener("ecotrace:reveal-file", (event) => {
-    const rel = (event as CustomEvent<string>).detail;
-    const match = state.files.find(
-      (f) => relPath(f.path, state.projectPath) === rel
-    );
-    if (match) revealFile(match.path);
+    const candidate = (event as CustomEvent<string>).detail;
+    const match = resolveFile(candidate);
+    if (match) revealFile(match);
   });
 
   // Enable the pane's controls only once there is something to act on.
@@ -394,5 +422,3 @@ export function initNavigator(): void {
 
   render();
 }
-
-export { icon };

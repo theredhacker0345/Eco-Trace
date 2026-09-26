@@ -55,8 +55,8 @@
   gap: var(--cx-space-3, 8px);
   flex-wrap: wrap;
   padding: var(--cx-space-2, 4px) var(--cx-space-5, 16px);
-  background: var(--cx-layer-01, #262626);
-  border-bottom: 1px solid var(--cx-layer-03, #525252);
+  background: var(--cx-surface-raised);
+  border-bottom: 1px solid var(--cx-border-default);
   font-size: 12px;
   line-height: 18px;
   color: var(--cx-text-secondary, #c6c6c6);
@@ -72,7 +72,7 @@
   height: 20px;
   display: inline-flex;
   align-items: center;
-  background: var(--cx-support-info, #0f62fe);
+  background: var(--cds-background-brand);
   color: #ffffff;
   font-weight: 600;
   letter-spacing: 0.32px;
@@ -90,12 +90,12 @@
 
 .cx-demo-banner__cta {
   flex: none;
-  color: var(--cx-link-primary, #78a9ff);
+  color: var(--cx-link);
   text-decoration: none;
   border-bottom: 1px solid currentColor;
 
   &:hover {
-    color: var(--cx-link-primary-hover, #a6c8ff);
+    color: var(--cx-link-hover);
   }
 }
 
@@ -224,7 +224,7 @@
 }
 
 .cx-conn--on .cx-conn__dot {
-  background: var(--cx-support-success);
+  background: var(--cx-success);
   animation: cx-pulse 3s var(--cx-ease-productive) infinite;
 }
 
@@ -941,7 +941,7 @@ body[data-resizing='true'] * {
 }
 
 .cx-toast--success .cx-toast__icon {
-  fill: var(--cx-support-success);
+  fill: var(--cx-success);
 }
 
 .cx-toast--info {

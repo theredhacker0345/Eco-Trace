@@ -68,7 +68,7 @@ await page.waitForTimeout(400);
 //     only one undersells work that took a token map.
 //
 //     Cycling once from g100 lands on g90, which is still dark -- so this walks
-     the cycle until it actually reaches white rather than assuming one press is
+//     the cycle until it actually reaches white rather than assuming one press is
 //     enough. An earlier run captured g90 and labelled it "light".
 async function cycleTheme() {
   await page.evaluate(() => document.getElementById("btn-command-palette")?.click());

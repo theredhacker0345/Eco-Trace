@@ -70,10 +70,6 @@ function apply(): void {
   }
 }
 
-export function paneWidth(pane: keyof PaneWidths): number {
-  return widths[pane];
-}
-
 export function initSplitters(): void {
   widths = load();
   apply();

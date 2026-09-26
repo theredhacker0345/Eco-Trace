@@ -59,13 +59,15 @@ export interface DumpsysResult {
    * `Uid <n> (<package>): <x> mAh` rows of the Estimated power use section.
    *
    * This is the value a drain rate should be derived from. It has 0.1 mAh
-   * resolution and is already an *increment over the counting window*, so it
-   * needs no battery-capacity assumption and no differencing — whereas the
-   * charge-level percentage only has 1% granularity, which on a 3000 mAh cell
-   * is a 30 mAh step: a two-minute session could only ever report 0 or
-   * 15 mAh/min. Present when at least one watched uid was resolved to a
-   * package; absent means the caller is profiling an unknown target, in which
-   * case the charge-level fallback in computeDelta is the best available.
+   * resolution and, unlike the charge level, needs no battery-capacity
+   * assumption: computeDelta gets the increment over the profiling window by
+   * differencing two snapshots of it (`after.appDrainMah - before.appDrainMah`),
+   * so what matters is the change between them, never the absolute figure. The
+   * charge-level fallback in the same function only has 1% granularity, which
+   * on a 3000 mAh cell is a 30 mAh step: a two-minute session could only ever
+   * report 0 or 15 mAh/min. Present when at least one watched uid was resolved
+   * to a package; absent means the caller is profiling an unknown target, in
+   * which case the charge-level fallback in computeDelta is the best available.
    */
   appDrainMah: number | null;
   /** Package names the rows in `appDrainMah` were attributed to. */
@@ -255,6 +257,71 @@ function round2(n: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// buildUidPackageMap
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the uid → package map from the only places batterystats prints a
+ * package name alongside a uid: the `Uid u0a213 (com.example.app):` rows of
+ * the Estimated power use section (and the same rows in the Discharge
+ * section), plus the `PACKAGE:` line under a per-uid block.
+ *
+ * Every other row — wakelocks, network traffic, whitelist entries — carries a
+ * bare uid, so without this map those rows can only report the synthetic
+ * `uid:<n>` / raw-uid placeholder they have always reported. With it they
+ * report the real package whenever this dump ever named one, and keep the
+ * placeholder when it did not: a uid with no known package is simply absent
+ * from the map, never guessed at.
+ *
+ * Each uid is filed under both of its spellings — `u0a213` and the numeric
+ * `10213` it expands to — because the Estimated-power-use rows use the letter
+ * form while the network and wakelock sections use the numeric one.
+ */
+function buildUidPackageMap(section: string, perUid: PerUidEntry[]): Map<string, string> {
+  const map = new Map<string, string>();
+
+  const add = (uid: string | undefined, pkg: string | undefined): void => {
+    if (!uid || !pkg || pkg === uid) return;
+    for (const spelling of uidSpellings(uid)) {
+      if (!map.has(spelling)) map.set(spelling, pkg);
+    }
+  };
+
+  // Uid u0a213 (com.example.app): 412.6 mAh  —  parens are the signal that
+  // this row actually names the package.
+  const rowRe = /^\s*Uid\s+(\S+)\s*\(([^)]+)\)\s*:/i;
+  for (const line of section.split('\n')) {
+    const m = rowRe.exec(line);
+    if (m) add(m[1], m[2].trim());
+  }
+
+  for (const entry of perUid) add(entry.uid, entry.packageName);
+
+  return map;
+}
+
+/**
+ * The spellings batterystats uses for one uid: `u0a213` ↔ `10213`, derived
+ * from the Android uid layout (`userId * 100000 + appId`, where an `aN` app id
+ * is `10000 + N`). A uid that converts to nothing — `1000` for android, say —
+ * is filed under the spelling it arrived in.
+ */
+function uidSpellings(uid: string): string[] {
+  const lettered = /^u(\d+)a(\d+)$/.exec(uid);
+  if (lettered) {
+    const numeric = Number(lettered[1]) * 100000 + 10000 + Number(lettered[2]);
+    return [uid, String(numeric)];
+  }
+  if (/^\d+$/.test(uid)) {
+    const numeric = Number(uid);
+    const userId = Math.floor(numeric / 100000);
+    const appId = numeric % 100000;
+    if (appId >= 10000) return [uid, `u${userId}a${appId - 10000}`];
+  }
+  return [uid];
+}
+
+// ---------------------------------------------------------------------------
 // parsePerUidData
 // ---------------------------------------------------------------------------
 
@@ -301,7 +368,10 @@ export function parsePerUidData(section: string): PerUidEntry[] {
 // parseWakelockHistory
 // ---------------------------------------------------------------------------
 
-export function parseWakelockHistory(section: string): WakelockEntry[] {
+export function parseWakelockHistory(
+  section: string,
+  uidToPackage?: ReadonlyMap<string, string>
+): WakelockEntry[] {
   const entries: WakelockEntry[] = [];
 
   try {
@@ -314,7 +384,10 @@ export function parseWakelockHistory(section: string): WakelockEntry[] {
       if (!m) continue;
       entries.push({
         name: m[1],
-        packageName: `uid:${m[4]}`,
+        // The row only carries a uid; the real package name comes from the
+        // uid → package map when this uid was ever seen with one, and the
+        // synthetic `uid:<n>` remains for uids no section named.
+        packageName: uidToPackage?.get(m[4]) ?? `uid:${m[4]}`,
         holdDurationMs: safeFloat(m[3]),
         acquireCount: safeInt(m[2]),
       });
@@ -330,7 +403,10 @@ export function parseWakelockHistory(section: string): WakelockEntry[] {
 // parseNetworkStats
 // ---------------------------------------------------------------------------
 
-export function parseNetworkStats(section: string): NetworkEntry[] {
+export function parseNetworkStats(
+  section: string,
+  uidToPackage?: ReadonlyMap<string, string>
+): NetworkEntry[] {
   // We receive either the wifi section or the mobile section.
   // Caller merges results; here we detect which type from content.
   const entries: PerUidNetRaw[] = [];
@@ -354,7 +430,7 @@ export function parseNetworkStats(section: string): NetworkEntry[] {
     // defensive
   }
 
-  return mergeNetworkEntries(entries);
+  return mergeNetworkEntries(entries, uidToPackage);
 }
 
 interface PerUidNetRaw {
@@ -364,13 +440,19 @@ interface PerUidNetRaw {
   iface: 'wifi' | 'mobile';
 }
 
-function mergeNetworkEntries(raws: PerUidNetRaw[]): NetworkEntry[] {
+function mergeNetworkEntries(
+  raws: PerUidNetRaw[],
+  uidToPackage?: ReadonlyMap<string, string>
+): NetworkEntry[] {
   const map = new Map<string, NetworkEntry>();
   for (const r of raws) {
     if (!map.has(r.uid)) {
       map.set(r.uid, {
         uid: r.uid,
-        packageName: r.uid,
+        // The traffic rows carry a bare uid, so a real package name is only
+        // possible through the uid → package map; an unknown uid keeps the
+        // raw uid it has always reported rather than inventing a package.
+        packageName: uidToPackage?.get(r.uid) ?? r.uid,
         wifiRxBytes: 0,
         wifiTxBytes: 0,
         mobileRxBytes: 0,
@@ -393,7 +475,36 @@ function mergeNetworkEntries(raws: PerUidNetRaw[]): NetworkEntry[] {
 // parseDozeViolations
 // ---------------------------------------------------------------------------
 
-export function parseDozeViolations(section: string): DozeViolation[] {
+/**
+ * DeviceIdleController state numbers, verbatim from AOSP
+ * (`frameworks/base/.../DeviceIdleController.java`). Older revisions of this
+ * parser assumed 2 = IDLE and 3 = MAINTENANCE, which never matched a real
+ * dump: those numbers are IDLE_PENDING and SENSING, so genuine IDLE↔
+ * MAINTENANCE transitions were invisible and the walking-towards-idle
+ * transitions were reported as idle exits.
+ */
+const IDLE_STATE_NAMES: Record<number, string> = {
+  0: 'ACTIVE',
+  1: 'INACTIVE',
+  2: 'IDLE_PENDING',
+  3: 'SENSING',
+  4: 'LOCATING',
+  5: 'IDLE',
+  6: 'IDLE_MAINTENANCE',
+};
+
+/** The only state from which an exit is reportable (5 = IDLE). */
+const IDLE_STATE = 5;
+
+/** Name for a state number, falling back to the raw number for unknowns. */
+function idleStateName(state: number): string {
+  return IDLE_STATE_NAMES[state] ?? String(state);
+}
+
+export function parseDozeViolations(
+  section: string,
+  uidToPackage?: ReadonlyMap<string, string>
+): DozeViolation[] {
   const violations: DozeViolation[] = [];
   const seen = new Set<string>();
 
@@ -407,31 +518,45 @@ export function parseDozeViolations(section: string): DozeViolation[] {
   try {
     const lines = section.split('\n');
 
+    // Tracked forwards rather than by walking backwards from each line: a
+    // transition only makes sense with both ends, and the numbering above is
+    // what tells IDLE (5) apart from IDLE_PENDING (2) or SENSING (3).
+    let lastIdleState: number | null = null;
+    let inIdle = false;
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      // ── App-level Doze state machine ────────────────────────────────────
+      // ── Doze state machine ──────────────────────────────────────────────
       // batterystats prints the device's own transitions as
-      //   mDeviceIdleState=3 (IDLE) → mDeviceIdleState=2
-      // and per-package transitions as
+      //   mDeviceIdleState=5 (IDLE) → mDeviceIdleState=6 (IDLE_MAINTENANCE)
+      // next to per-package lines such as
       //   App com.example.app deadline exceeded: [10] +5m0s
-      // A transition out of IDLE/MAINTENANCE back to a running state means the
-      // package pulled the device out of idle.
+      // Entering IDLE (anything → 5) arms the machine; leaving it (5 → any
+      // other state, 6 included) is the idle exit worth reporting — the
+      // moment a package's work ran outside idle. Walking towards idle
+      // (0 → 1 → 2 → 3 → 4) is the device scheduling doze, not leaving it,
+      // and is deliberately not a finding.
       const idleLine = /mDeviceIdleState=(\d+)/.exec(line);
       if (idleLine) {
         const next = Number(idleLine[1]);
-        // 2 = IDLE, 3 = MAINTENANCE. 1 = LIGHT_IDLE on older builds. Anything
-        // at or below those, arriving from a deeper state, is an idle exit.
-        if (next <= 2) {
-          const prev = previousIdleState(lines, i);
-          if (prev !== null && prev > next) {
-            const pkg = packageFor(lines, i);
-            push({
-              packageName: pkg,
-              type: 'idle-exit',
-              details: `Doze idle state ${prev} → ${next} (line ${i + 1})`,
-            });
-          }
+        const prev = lastIdleState;
+        lastIdleState = next;
+
+        if (next === IDLE_STATE && prev !== IDLE_STATE) {
+          // Entering IDLE — from INACTIVE/SENSING/LOCATING on the way down,
+          // or straight back from a maintenance window (6 → 5).
+          inIdle = true;
+        } else if (prev === IDLE_STATE && next !== IDLE_STATE && inIdle) {
+          // 5 → 6 opens a maintenance window in which the package's work
+          // runs; 5 → anything lower means the device was pulled out of doze
+          // outright. Both are exits from IDLE, so both are reported.
+          inIdle = false;
+          push({
+            packageName: packageFor(lines, i),
+            type: 'idle-exit',
+            details: `Doze idle state ${idleStateName(prev)} → ${idleStateName(next)} (line ${i + 1})`,
+          });
         }
         continue;
       }
@@ -451,23 +576,58 @@ export function parseDozeViolations(section: string): DozeViolation[] {
       // The real header is `Whitelisted app stats:`. The previous parser
       // looked for `Doze Whitelist`, a string that does not appear in
       // batterystats output at all, so the whitelist branch was unreachable
-      // and the section silently contributed nothing.
+      // and the section silently contributed nothing. The revision after that
+      // guarded the loop with `/^\s*\S/`, which matches any non-empty line:
+      // a well-shaped entry was still read, because the accept test runs
+      // first, but the very first separator or annotation line after it ended
+      // the whole section. This one walks the section instead: entries are
+      // consumed, separators are skipped, ordinary annotation lines are
+      // ignored, and only a real boundary — a `Uid ...` app-power block, a
+      // run of blank lines, or the next section header — stops the scan.
       if (/^\s*Whitelisted app stats\s*:?\s*$/i.test(line)) {
+        let blanks = 0;
         for (let j = i + 1; j < lines.length; j++) {
           const entry = lines[j];
-          if (entry.trim() === '') break;
-          if (/^\s*[\d.]+:\s*[\d.]+mAh/.test(entry)) {
-            const pkg = /^\s*([\w.]+)\s*:/.exec(entry)?.[1];
-            if (pkg) {
-              push({
-                packageName: pkg,
-                type: 'whitelist',
-                details: entry.trim().slice(0, 200),
-              });
-            }
+          const trimmed = entry.trim();
+
+          // A run of blank lines ends the block; a single blank inside it is
+          // just spacing between groups.
+          if (trimmed === '') {
+            blanks += 1;
+            if (blanks >= 2) break;
             continue;
           }
-          if (/^\s*Uid\s/i.test(entry) || /^\s*\S/.test(entry)) break;
+          blanks = 0;
+
+          // Rules of the dump, not data: `----`, `====`, and their cousins.
+          if (/^[-=_*#+~·]+$/.test(trimmed)) continue;
+
+          // Boundary — the `Uid ...` app-power block that follows the list.
+          if (/^\s*Uid\s/i.test(entry)) break;
+
+          // Boundary — the next section header: batterystats titles start at
+          // column 0 and end in a colon.
+          if (/^\S[^:]*:\s*$/.test(entry)) break;
+
+          // An entry: `10012: 45mAh`. The leading token is a uid index in
+          // practice (or a package name, should the dump print one), so it is
+          // resolved through the uid → package map like every other bare uid.
+          const entryMatch = /^\s*([\w.]+):\s*[\d.]+\s*mAh\b/i.exec(entry);
+          if (entryMatch) {
+            const key = entryMatch[1];
+            const pkg =
+              uidToPackage?.get(key) ??
+              (key.includes('.') ? key : `uid:${key}`);
+            push({
+              packageName: pkg,
+              type: 'whitelist',
+              details: trimmed.slice(0, 200),
+            });
+            continue;
+          }
+
+          // Anything else inside the block is annotation — skip it and keep
+          // reading; the boundary tests above decide when to stop.
         }
         continue;
       }
@@ -477,15 +637,6 @@ export function parseDozeViolations(section: string): DozeViolation[] {
   }
 
   return violations;
-}
-
-/** Walks backwards to the last idle state seen, so a transition has two ends. */
-function previousIdleState(lines: string[], before: number): number | null {
-  for (let i = before - 1; i >= 0 && i >= before - 40; i--) {
-    const m = /mDeviceIdleState=(\d+)/.exec(lines[i]);
-    if (m) return Number(m[1]);
-  }
-  return null;
 }
 
 /** The nearest package name to a line, used to attribute a device transition. */
@@ -632,14 +783,15 @@ export function parseDumpsys(raw: string, watchedPackages?: readonly string[]): 
       perUid = parsePerUidData(sections.estimatedPower + '\n' + sections.discharge);
     } catch { /* defensive */ }
 
-    // uid → package, so the Estimated-power-use rows can be attributed even
-    // when batterystats omits the parenthetical package name.
-    const uidToPackage = new Map<string, string>();
-    for (const entry of perUid) {
-      if (entry.packageName && entry.packageName !== entry.uid) {
-        uidToPackage.set(entry.uid, entry.packageName);
-      }
-    }
+    // uid → package, from the rows that carry package names (see
+    // buildUidPackageMap). It attributes the Estimated-power-use rows when
+    // batterystats omits the parenthetical package, and it is what lets the
+    // wakelock, network and whitelist rows below report a real package name
+    // instead of a bare uid.
+    const uidToPackage = buildUidPackageMap(
+      sections.estimatedPower + '\n' + sections.discharge,
+      perUid
+    );
 
     let appDrainMah: number | null = null;
     let appPackages: string[] = [];
@@ -656,14 +808,14 @@ export function parseDumpsys(raw: string, watchedPackages?: readonly string[]): 
     // Wakelocks
     let wakelocks: WakelockEntry[] = [];
     try {
-      wakelocks = parseWakelockHistory(sections.wakeLocks);
+      wakelocks = parseWakelockHistory(sections.wakeLocks, uidToPackage);
     } catch { /* defensive */ }
 
     // Network — parse wifi and mobile sections, then merge by uid
     let network: NetworkEntry[] = [];
     try {
-      const wifiEntries = parseNetworkStats(sections.wifiNetwork);
-      const mobileEntries = parseNetworkStats(sections.mobileNetwork);
+      const wifiEntries = parseNetworkStats(sections.wifiNetwork, uidToPackage);
+      const mobileEntries = parseNetworkStats(sections.mobileNetwork, uidToPackage);
       // Merge by uid
       const netMap = new Map<string, NetworkEntry>();
       for (const e of [...wifiEntries, ...mobileEntries]) {
@@ -683,7 +835,7 @@ export function parseDumpsys(raw: string, watchedPackages?: readonly string[]): 
     // Doze violations — scan the full raw text
     let dozeViolations: DozeViolation[] = [];
     try {
-      dozeViolations = parseDozeViolations(raw);
+      dozeViolations = parseDozeViolations(raw, uidToPackage);
     } catch { /* defensive */ }
 
     // CPU wakeups — scan the full raw text
@@ -728,9 +880,10 @@ export function parseDumpsys(raw: string, watchedPackages?: readonly string[]): 
  * Two estimators, in order of preference:
  *
  *  1. `appDrainMah` — batterystats' own per-uid mAh accounting for the
- *     packages under test. Resolution 0.1 mAh, already a window delta, and
- *     scoped to the app rather than to the whole device. This is the number a
- *     developer can act on.
+ *     packages under test, differenced between the two snapshots so the figure
+ *     is the window's increment. Resolution 0.1 mAh, and scoped to the app
+ *     rather than to the whole device. This is the number a developer can act
+ *     on.
  *  2. Charge level — `(before% - after%) / 100 * capacity`. The capacity is a
  *     nominal guess (a 3000 mAh cell is typical but not universal) and the
  *     resolution is one percentage point, i.e. 30 mAh. On a short session that

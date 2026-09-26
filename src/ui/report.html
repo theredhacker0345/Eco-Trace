@@ -996,8 +996,11 @@ td.num, th.num { text-align: right; }
     byCategory.get(key).push(f);
   }
 
-  const findingBlock = (f, open) => `
-  <details class="finding"${open ? " open" : ""}>
+  // Every finding renders open. This is the exported document: it is read,
+  // not clicked through, and a collapsed row in a printed PDF is a finding the
+  // reader cannot see at all.
+  const findingBlock = (f) => `
+  <details class="finding" open>
     <summary>
       <span class="finding__caret" aria-hidden="true">&#9656;</span>
       <span class="tag tag--${sevClass(f.severity)}">${esc(f.severity)}</span>
@@ -1038,7 +1041,7 @@ td.num, th.num { text-align: right; }
   const groups = [...byCategory.entries()]
     .map(([name, list]) => {
       const rows = list
-        .map((f) => findingBlock(f, f.severity === "Critical"))
+        .map((f) => findingBlock(f))
         .join("\n");
       return (
         '<div class="group"><div class="group__head"><span class="group__name">' + esc(name) +
@@ -1420,9 +1423,6 @@ td.num, th.num { text-align: right; }
 
   // ── Mount ─────────────────────────────────────────────────────────────
 
-  const sectionNumbers = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"];
-  void sectionNumbers;
-
   document.getElementById("root").innerHTML =
     masthead +
     summary +
@@ -1451,9 +1451,10 @@ td.num, th.num { text-align: right; }
 
   // Printing a collapsed report would produce a PDF that shows a list of rule
   // names and none of their content, which is worse than useless. Every
-  // disclosure is opened first, then the print stylesheet suppresses the
-  // controls that make no sense on paper.
-  let expandedAll = false;
+  // disclosure is rendered open above, then the print stylesheet suppresses
+  // the controls that make no sense on paper — and printing re-opens anything
+  // the reader shut on screen, restoring their choice afterwards.
+  let expandedAll = true;
   const expandBtn = document.getElementById("btn-expand");
   const allFindingsEls = () => document.querySelectorAll(".finding");
 
@@ -1480,15 +1481,23 @@ td.num, th.num { text-align: right; }
     });
   }
 
-  // A report opened from disk is usually printed, and Ctrl+P should give the
-  // same thing the button does.
+  // A report opened from disk is usually printed, and Ctrl+P must give the
+  // same thing the button does: everything open while the dialog captures the
+  // layout, then the reader's own expansion state put back afterwards — a
+  // print that expanded the page and left it expanded has changed the
+  // document the reader was looking at.
+  let expandedBeforePrint = expandedAll;
   window.addEventListener("beforeprint", () => {
+    expandedBeforePrint = expandedAll;
     if (!expandedAll) setExpanded(true);
   });
+  window.addEventListener("afterprint", () => {
+    if (!expandedBeforePrint) setExpanded(false);
+  });
 
-  // Critical findings start open so the document is useful the moment it
-  // loads; everything else is one click away.
-  setExpanded(false);
+  // Sync the state (and the button's label) with the markup: findings are
+  // rendered open, so the control starts out as the one that shuts them.
+  setExpanded(true);
 })();
 </script>
 </body>

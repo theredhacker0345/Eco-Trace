@@ -180,17 +180,24 @@
   white-space: pre-line;
 }
 
+// Shared by both key/value lists in this pane — the finding details above the
+// chain and the AI-fix facts. A second copy of this block used to live in the
+// AI-fix section and won every cascade tie, so these are its values: the 96px
+// label column and the 11px/16px label step, not the 84px/12px pair the
+// superseded copy declared. The type tokens are spelled out as literals
+// because no `--cx-text-label-01` / `--cx-line-height-label-01` is ever
+// defined — `var()` would only ever have reached its fallback.
 .cx-kv {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
   gap: var(--cx-space-2xs) var(--cx-space-sm);
   margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .cx-kv__k {
-  color: var(--cds-text-placeholder);
+  color: var(--cx-text-secondary);
   margin: 0;
 }
 
@@ -466,16 +473,16 @@
   padding: var(--cx-space-4, 12px) var(--cx-space-4, 12px);
   font-size: var(--cx-text-body-short-01, 14px);
   line-height: var(--cx-line-height-body-short-01, 20px);
-  border-left: 3px solid var(--cx-support-warning, #8e6a00);
-  background: var(--cx-layer-01, #f4f4f4);
+  border-left: 3px solid var(--cx-high);
+  background: var(--cx-surface-raised);
 }
 
 .cx-aifix__verdict[data-tone='ok'] {
-  border-left-color: var(--cx-support-success, #198038);
+  border-left-color: var(--cx-success);
 }
 
 .cx-aifix__verdict[data-tone='bad'] {
-  border-left-color: var(--cx-support-error, #da1e28);
+  border-left-color: var(--cx-critical);
 }
 
 .cx-aifix__cost {
@@ -484,34 +491,16 @@
   color: var(--cx-text-primary, #161616);
 }
 
-.cx-kv {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: var(--cx-space-2, 4px) var(--cx-space-4, 12px);
-  font-size: var(--cx-text-label-01, 11px);
-  line-height: var(--cx-line-height-label-01, 16px);
-  margin: 0;
-}
-
-.cx-kv dt {
-  color: var(--cx-text-secondary, #8d8d8d);
-}
-
-.cx-kv dd {
-  margin: 0;
-  font-family: var(--cx-font-mono, monospace);
-  color: var(--cx-text-primary, #161616);
-  overflow-wrap: anywhere;
-}
-
 .cx-code--diff {
-  border-left-color: var(--cx-support-info, #0f62fe);
+  border-left-color: var(--cx-info);
   color: var(--cx-text-primary, #161616);
 }
 
 // A rejected patch is never applied, so the actions are withheld rather than
 // disabled-and-clickable.
 .cx-fix__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cx-space-2xs);
   flex-wrap: wrap;
-  gap: var(--cx-space-2, 4px);
 }

@@ -11,6 +11,14 @@ export interface AppSettings {
   apiKey: string;
   /** Bob model to use for analysis. */
   bobModel: "bob-2" | "bob-2-mini";
+  /**
+   * Shell command run to verify an AI patch before it is committed.
+   *
+   * Empty string disables verification: the Rust side types this as
+   * `verify_command: Option<String>` and skips the check when the value is
+   * absent or blank.
+   */
+  verifyCommand: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -18,7 +26,12 @@ export interface AppSettings {
 // ---------------------------------------------------------------------------
 
 export function getDefaultSettings(): AppSettings {
-  return { adbPath: "adb", apiKey: "", bobModel: "bob-2" };
+  return {
+    adbPath: "adb",
+    apiKey: "",
+    bobModel: "bob-2",
+    verifyCommand: "npx tsc --noEmit",
+  };
 }
 
 // ---------------------------------------------------------------------------

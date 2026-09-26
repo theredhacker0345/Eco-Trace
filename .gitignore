@@ -31,4 +31,7 @@ desktop.ini
 .env.local
 .env.*.local
 
+# Vercel
+.vercel/
+
 # bob_sessions/ is intentionally tracked -- contains hackathon session evidence

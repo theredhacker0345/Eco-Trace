@@ -155,7 +155,7 @@ over both corpora and a set of hand-written cases, and fails on any of:
   (`src/test-fixtures/SampleAndroidApp/README.md`) documents that no longer fires;
 - a rule firing in a file whose README table does not list it — the table is the
   contract, so documentation cannot silently fall behind a detector;
-- any finding in the seven documented-clean corpus files;
+- any finding in the nine documented-clean corpus files;
 - any finding at all in a case written to be correct (an OkHttp import, a
   permission check, an XML namespace, `stopSelf(startId)`, a bound service, a
   foreground service, `setAlarmClock`, two unrelated timers, `list.execute(item)`,
@@ -376,6 +376,32 @@ If you see this error again after pulling new code, check that `Array.from()` is
 
 ---
 
+## 9. Test Fixtures
+
+EcoTrace ships with a small Android project pre-loaded with known anti-patterns so you can verify the analyzer works without cloning a real app.
+
+**Location:** `src/test-fixtures/SampleAndroidApp/`
+
+Point EcoTrace at this folder using **"Open Project"** and run **"Analyze"**. You should see exactly these findings (11 total):
+
+| Finding ID | Severity | Anti-Pattern |
+|-----------|----------|-------------|
+| W01 | 🔴 Critical | Wake lock held indefinitely |
+| W04 | 🔴 Critical | PARTIAL_WAKE_LOCK in background service |
+| L01 | 🔴 Critical | GPS update interval under 30 seconds |
+| L03 | 🔴 Critical | Sensor listener not unregistered |
+| L02 | 🟠 High | FINE location when COARSE sufficient |
+| L04 | 🟠 High | Full-rate accelerometer for step counting |
+| A06 | 🟠 High | AlarmManager WAKEUP for non-critical work |
+| A01 | 🟠 High | Service with no stopSelf() call |
+| A02 | 🟠 High | Deferrable work using raw Service |
+| N02 | 🟠 High | No connection/read timeout on client |
+| A03 | 🟡 Medium | JobScheduler ignored for background sync |
+
+If any of these findings are missing, or if unexpected errors appear, something is misconfigured — check the console output from `cargo tauri dev` for details.
+
+---
+
 ## 10. Performance Characteristics
 
 Three things decide whether EcoTrace feels light on a large project.
@@ -397,22 +423,6 @@ table and the same report.
 **Reads are bounded and rooted.** Single files over 2 MB are refused, and every
 path is checked against the canonicalised project root after symlink
 resolution — so neither `..` segments nor a symlink can read outside the project.
-
----
-
-## 9. Test Fixtures
-
-EcoTrace ships with a small Android project pre-loaded with known anti-patterns so you can verify the analyzer works without cloning a real app.
-
-**Location:** `src/test-fixtures/SampleAndroidApp/`
-
-Point EcoTrace at this folder using **"Open Project"** and run **"Analyze"**. You should see exactly these findings:
-
-| Finding ID | Severity | Anti-Pattern |
-|-----------|----------|-------------|
-| W01 | 🔴 Critical | Wake lock held indefinitely |
-| N02 | 🟠 High | Network call on main thread / no batching |
-| A01 | 🟠 High | Alarm manager using inexact repeating at high frequency |
 
 If any of these findings are missing, or if unexpected errors appear, something is misconfigured — check the console output from `cargo tauri dev` for details.
 

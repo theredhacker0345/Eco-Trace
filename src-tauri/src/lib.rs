@@ -1,9 +1,10 @@
 // EcoTrace — Tauri backend
-// Four small Rust commands:
-//   - walk_dir:    walks a directory tree and returns .java/.kt file paths
-//   - read_file:   reads a source file at a path inside an approved root
-//   - read_text:   reads a bounded text file (AndroidManifest.xml, Gradle files)
+// Five rooted Rust commands:
+//   - walk_dir:     walks a directory tree and returns .java/.kt file paths
+//   - read_file:    reads a source file at a path inside an approved root
+//   - read_text:    reads a bounded text file (AndroidManifest.xml, Gradle files)
 //   - read_manifest: extracts the application ids from an AndroidManifest.xml
+//   - apply_patch:  applies a model-authored patch, verifies it, commits to a branch
 //
 // ADB execution is handled entirely from TypeScript via tauri-plugin-shell —
 // no subprocess spawning on the Rust side.
@@ -308,11 +309,7 @@ fn manifest_package(path: &Path) -> Option<String> {
     Some(id.to_string())
 }
 
-/// True when `path` has no parent-directory component that could escape.
-#[allow(dead_code)]
-fn is_flat(path: &Path) -> bool {
-    path.components().all(|c| !matches!(c, Component::ParentDir))
-}
+
 
 // ---------------------------------------------------------------------------
 // apply_patch

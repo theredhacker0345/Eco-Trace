@@ -929,26 +929,23 @@
 // button that reads correctly on Gray 100 does not read correctly on white.
 // These are the only values that have to be restated per theme — every
 // universal colour role already follows the theme through _tokens.scss.
+//
+// g90 is a *dark* theme, not a light one: its text stays #f4f4f4, so only
+// white may take the light grays. A #e0e0e0 fill under `var(--cx-text-primary)`
+// on g90 is a ~1.2:1 failure, so g90 gets Carbon's own g90 layers instead.
 // ===========================================================================
 
+// Shared by both themes: values that are identical on g90 and white — the
+// brand blues, the tertiary border and danger reds they have in common, the
+// status tints, and the lighter overlay shadows a scrimmed surface wants.
 [data-theme='g90'],
 [data-theme='white'] {
   --cx-btn-primary: #0f62fe;
   --cx-btn-primary-hover: #0353e9;
   --cx-btn-primary-active: #002d9c;
-  --cx-btn-secondary: #e0e0e0;
-  --cx-btn-secondary-hover: #cacaca;
   --cx-btn-tertiary-border: #8d8d8d;
-  --cx-btn-tertiary-hover: #e0e0e0;
   --cx-btn-danger: #da1e28;
   --cx-btn-danger-hover: #ba1b23;
-  --cx-tag-background: #e0e0e0;
-  --cx-tag-red-text: #a2191f;
-  --cx-tag-green-text: #198038;
-  --cx-tag-yellow-text: #8e6a00;
-  --cx-tag-orange-text: #ba4e00;
-  --cx-tag-blue-text: #0043ce;
-  --cx-tag-purple-text: #6929c4;
 
   --cx-critical-tint: rgba(250, 77, 86, 0.12);
   --cx-high-tint: rgba(255, 131, 43, 0.12);
@@ -962,7 +959,30 @@
     0 18px 48px rgba(0, 0, 0, 0.16);
 }
 
+// g90 — Carbon's Gray 90 layers, resolved through the token the theme mixin
+// emits so the value always tracks the active theme. Tag text is left on the
+// g100 values declared in :root (light text on a dark chip).
+[data-theme='g90'] {
+  --cx-btn-secondary: var(--cds-layer-02); // #525252
+  --cx-btn-secondary-hover: var(--cds-layer-03); // #6f6f6f
+  --cx-btn-tertiary-hover: var(--cds-layer-01); // #393939
+  --cx-tag-background: var(--cds-layer-01); // #393939
+}
+
+// white — the light fills, paired with Carbon's dark tag text so every tag
+// keeps its contrast, plus the darker severity colours a light surface needs.
 [data-theme='white'] {
+  --cx-btn-secondary: #e0e0e0;
+  --cx-btn-secondary-hover: #cacaca;
+  --cx-btn-tertiary-hover: #e0e0e0;
+  --cx-tag-background: #e0e0e0;
+  --cx-tag-red-text: #a2191f;
+  --cx-tag-green-text: #198038;
+  --cx-tag-yellow-text: #8e6a00;
+  --cx-tag-orange-text: #ba4e00;
+  --cx-tag-blue-text: #0043ce;
+  --cx-tag-purple-text: #6929c4;
+
   --cx-critical: #da1e28;
   --cx-high: #ba4e00;
   --cx-medium: #8e6a00;
@@ -1003,10 +1023,12 @@
 // Button group
 //
 // Three export formats that are one decision, not three. The shared border and
-// the negative margins make them read as a single control: the outer edges carry
-// the radius, the inner edges collapse, and no button appears to be detached
-// from its neighbour. The primary action leads so the group's default is its
-// first member, which keeps it in the tab order where it is expected.
+// the negative margins make them read as a single control: the seams collapse,
+// so no button appears to be detached from its neighbour. Carbon is square —
+// `--cx-radius: 0` (see _tokens.scss) — so there is no radius for the outer
+// edges to carry and none to zero off; every corner is already 0. The primary
+// action leads so the group's default is its first member, which keeps it in
+// the tab order where it is expected.
 // ============================================================================
 
 .cx-btn-group {
@@ -1023,16 +1045,8 @@
     margin-left: 0;
   }
 
-  // Only the outer corners are rounded.
-  > .cx-btn:first-child {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-  }
-
-  > .cx-btn:last-child {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-  }
+  // Outer corners are squared off by `--cx-radius: 0` on `.cx-btn` itself, so
+  // there is nothing to declare here: a radius rule would be a no-op.
 
   // The later buttons sit on top at the seam, so the shared edge reads as one
   // line rather than two doubled pixels.

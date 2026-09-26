@@ -28,7 +28,7 @@
     property="og:description"
     content="Your battery report says line 48 leaks a WakeLock. EcoTrace shows you the alarm in MainActivity that put line 48 on the path ninety-six times a day."
   />
-  <meta property="og:image" content="./icon-512.png" />
+  <meta property="og:image" content="https://theredhacker0345.github.io/Eco-Trace/icon-512.png" />
   <meta name="twitter:card" content="summary_large_image" />
 </head>
 <body>
@@ -361,8 +361,8 @@
         <div class="cx-table-wrap" id="work-surface" tabindex="-1">
           <table class="cx-table" id="findings-table">
             <caption class="visually-hidden">
-              Detected energy anti-patterns, sortable by severity, location,
-              pattern and category.
+              Detected energy anti-patterns, sortable by severity, rule,
+              finding, category and location.
             </caption>
             <colgroup>
               <col style="width: 40px" />
@@ -378,10 +378,10 @@
                 <th scope="col" class="cx-table__sortable" data-sort="severity" aria-sort="ascending">
                   <span class="cx-table__sort">Severity<svg class="i"><use href="#i-sort" /></svg></span>
                 </th>
-                <th scope="col" class="cx-table__sortable" data-sort="pattern" aria-sort="none">
+                <th scope="col" class="cx-table__sortable" data-sort="patternId" aria-sort="none">
                   <span class="cx-table__sort">Rule<svg class="i"><use href="#i-sort" /></svg></span>
                 </th>
-                <th scope="col" class="cx-table__sortable" data-sort="file" aria-sort="none">
+                <th scope="col" class="cx-table__sortable" data-sort="pattern" aria-sort="none">
                   <span class="cx-table__sort">Finding<svg class="i"><use href="#i-sort" /></svg></span>
                 </th>
                 <th scope="col" class="cx-table__sortable" data-sort="category" aria-sort="none">
@@ -626,10 +626,6 @@
                   <svg class="i"><use href="#i-bulb" /></svg>
                   <span id="fix-origin-text">Template remediation</span>
                 </span>
-                <button id="btn-copy-fix" class="cx-btn cx-btn--tertiary cx-btn--sm">
-                  <svg class="i"><use href="#i-copy" /></svg>
-                  Copy
-                </button>
               </div>
               <pre class="cx-code cx-code--fix cx-code--gutter" id="fix-code" tabindex="0" aria-label="Generated fix"></pre>
               <div class="cx-fix__actions">
@@ -767,7 +763,7 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
      Onboarding — shown until a project is open
      ═══════════════════════════════════════════════════════════════════ -->
-<div id="landing" class="cx-onboarding" data-open="true" role="dialog" aria-modal="false"
+<div id="landing" class="cx-onboarding" data-open="true" role="dialog" aria-modal="true"
      aria-labelledby="onboarding-title">
   <div class="cx-onboarding__inner">
     <div class="cx-onboarding__head">
@@ -858,7 +854,10 @@
     <div class="cx-palette__input">
       <svg class="i"><use href="#i-search" /></svg>
       <input id="palette-input" class="cx-palette__field" type="text" autocomplete="off"
-             spellcheck="false" placeholder="Search commands, findings and files" />
+             spellcheck="false" role="combobox" aria-expanded="false"
+             aria-controls="palette-list" aria-autocomplete="list"
+             aria-label="Search commands, findings and files"
+             placeholder="Search commands, findings and files" />
     </div>
     <div class="cx-palette__list" id="palette-list" role="listbox" aria-label="Commands"></div>
     <div class="cx-palette__footer">
@@ -912,6 +911,17 @@
           <p class="cx-field__hint">
             Issued from bob.ibm.com under Account → API Keys. Sent only to the
             Bob endpoint, never written to a log.
+          </p>
+        </div>
+
+        <div class="cx-field">
+          <label class="cx-field__label" for="input-verify-command">
+            Verify command <span class="cx-tag cx-tag--sm cx-tag--neutral">Optional</span>
+          </label>
+          <input type="text" id="input-verify-command" class="cx-input cx-input--mono"
+                 value="" placeholder="npx tsc --noEmit" autocomplete="off" spellcheck="false" />
+          <p class="cx-field__hint">
+            Run before committing an AI fix. Leave empty to skip verification.
           </p>
         </div>
 
@@ -978,9 +988,10 @@
             <svg class="cx-select__chevron"><use href="#i-chevron-down" /></svg>
           </div>
           <p class="cx-field__hint">
-            EcoTrace is built on the IBM Carbon Design System, which ships four
-            themes over one shared token set. Switching is instant and
-            affects the whole application.
+            EcoTrace is built on the IBM Carbon Design System, which ships the
+            three themes this selector offers — Gray 100, Gray 90 and white —
+            over one shared token set. Switching is instant and affects the
+            whole application.
           </p>
         </div>
       </div>

@@ -1,8 +1,9 @@
 /**
  * Carbon theme selection.
  *
- * EcoTrace is built on the IBM Carbon Design System, which ships four themes
- * over one shared token set. Because every surface, border and text colour in
+ * EcoTrace is built on the IBM Carbon Design System, which ships three themes
+ * over one shared token set (Gray 100, Gray 90 and White — the ones the theme
+ * selector offers). Because every surface, border and text colour in
  * the stylesheet resolves to a `--cds-*` custom property, switching theme is
  * a single attribute on the document root — no component rule changes, no
  * re-render, no flash.
