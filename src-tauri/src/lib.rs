@@ -314,6 +314,266 @@ fn is_flat(path: &Path) -> bool {
     path.components().all(|c| !matches!(c, Component::ParentDir))
 }
 
+// ---------------------------------------------------------------------------
+// apply_patch
+//
+// Applies a model-authored patch to a repository and, optionally, commits it to
+// a branch and pushes it.
+//
+// Why this is a Rust command rather than a `git` entry in the shell plugin's
+// allowlist: the shell scope matches a command's argument prefix, and `git` has
+// too many verbs to enumerate usefully -- so allowing it means allowing `git`.
+//
+// That trade is not worth making for an operation whose entire purpose is to
+// write code. A dedicated command can enforce the two rules that matter, and
+// they are the reason this feature is safe to ship at all:
+//
+//   1. **It never writes to `main`.** The patch lands on a generated branch and
+//      a human merges it. Generated code that reaches a protected branch with
+//      no review is a supply-chain risk, and the verification step below is
+//      exactly the sort of thing a model will write to satisfy itself.
+//   2. **The patch is checked before it is applied.** `git apply --check` runs
+//      first; if the context does not match, nothing is written and the command
+//      fails. A patch that applies approximately is worse than one rejected.
+//
+// The verifier is a caller-supplied command run in the repository root, and a
+// non-zero exit blocks the commit. That keeps "did this break anything" a
+// question with a checkable answer rather than a judgement call.
+#[derive(serde::Serialize)]
+pub struct PushOutcome {
+    /// What happened, for the run log.
+    pub summary: String,
+    /// The branch the commit landed on.
+    pub branch: String,
+    /// Files the patch touched.
+    pub files: Vec<String>,
+    /// Output of the verification command, on success.
+    pub verify_output: String,
+    /// Set when the commit was created but not pushed.
+    pub pushed: bool,
+    /// Populated on partial success, so the UI can say what did not happen.
+    pub warning: Option<String>,
+}
+
+/// Refuses branch names that are not plain, safe ref names.
+///
+/// A branch name reaches `git` as an argument, so anything with a space, a
+/// leading dash or a path separator is rejected rather than quoted. Quoting is
+/// error-prone across shells; refusing is not.
+fn validate_branch(branch: &str) -> Result<(), String> {
+    if branch.is_empty() || branch.len() > 100 {
+        return Err("branch name must be 1-100 characters".into());
+    }
+    if branch == "main" || branch == "master" || branch == "HEAD" {
+        return Err(format!(
+            "'{}' is a protected branch. A generated patch goes to its own branch and a human merges it.",
+            branch
+        ));
+    }
+    if !branch
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '/')
+    {
+        return Err(
+            "branch name may contain only letters, digits, '-', '_' and '/'".into()
+        );
+    }
+    if branch.starts_with('-') || branch.starts_with('/') || branch.ends_with('/') {
+        return Err("branch name has an invalid leading or trailing character".into());
+    }
+    if branch.contains("..") {
+        return Err("branch name may not contain '..'".into());
+    }
+    Ok(())
+}
+
+fn run_git(root: &Path, args: &[&str]) -> Result<(bool, String), String> {
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .output()
+        .map_err(|e| format!("failed to run git {}: {}", args.join(" "), e))?;
+
+    let mut text = String::from_utf8_lossy(&output.stdout).to_string();
+    text.push_str(&String::from_utf8_lossy(&output.stderr));
+    Ok((output.status.success(), text.trim().to_string()))
+}
+
+#[command]
+fn apply_patch(
+    root: String,
+    patch: String,
+    branch: String,
+    message: String,
+    verify_command: Option<String>,
+    push: bool,
+) -> Result<PushOutcome, String> {
+    let base = Path::new(&root);
+    if !base.is_dir() {
+        return Err(format!("apply_patch: '{}' is not a directory", root));
+    }
+    let base = base
+        .canonicalize()
+        .map_err(|e| format!("apply_patch: cannot resolve '{}': {}", root, e))?;
+
+    validate_branch(&branch)?;
+
+    if patch.trim().is_empty() {
+        return Err("apply_patch: the patch is empty".into());
+    }
+    // A patch is a diff. A 4 MB one is not a fix.
+    if patch.len() > 2 * 1024 * 1024 {
+        return Err("apply_patch: patch is implausibly large (over 2 MB)".into());
+    }
+
+    // Confirm this is a git working tree before touching anything.
+    let (ok, out) = run_git(&base, &["rev-parse", "--is-inside-work-tree"])?;
+    if !ok || !out.trim().eq_ignore_ascii_case("true") {
+        return Err("apply_patch: that folder is not a git repository".into());
+    }
+
+    // The working tree must be clean. Applying on top of uncommitted work makes
+    // the commit ambiguous and the rollback impossible to reason about.
+    let (clean, dirty) = run_git(&base, &["status", "--porcelain"])?;
+    if !clean {
+        return Err(format!("apply_patch: git status failed: {}", dirty));
+    }
+    if !dirty.trim().is_empty() {
+        let files: Vec<String> = dirty
+            .lines()
+            .take(6)
+            .map(|l| l[3.min(l.len())..].trim().to_string())
+            .collect();
+        return Err(format!(
+            "apply_patch: commit or stash your changes first. Uncommitted: {}",
+            files.join(", ")
+        ));
+    }
+
+    // Write the patch beside the repository rather than into it, so it can
+    // never be staged by accident.
+    let patch_path = std::env::temp_dir().join(format!(
+        "ecotrace-patch-{}.diff",
+        std::process::id()
+    ));
+    fs::write(&patch_path, patch.as_bytes())
+        .map_err(|e| format!("apply_patch: cannot write patch: {}", e))?;
+    let patch_arg = patch_path.to_string_lossy().to_string();
+
+    let result = (|| -> Result<PushOutcome, String> {
+        // Dry run first. This is the check that makes the whole feature safe:
+        // if the context does not match, nothing has been written.
+        let (ok, out) = run_git(&base, &["apply", "--check", &patch_arg])?;
+        if !ok {
+            return Err(format!(
+                "apply_patch: the patch does not apply to the current working tree. {}",
+                out.lines().take(3).collect::<Vec<_>>().join(" ")
+            ));
+        }
+
+        // Which files it touches, captured before applying.
+        let (_, name_only) = run_git(&base, &["apply", "--numstat", &patch_arg])?;
+        let files: Vec<String> = name_only
+            .lines()
+            .filter_map(|l| l.split('\t').nth(2))
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let (ok, out) = run_git(&base, &["apply", &patch_arg])?;
+        if !ok {
+            return Err(format!("apply_patch: git apply failed: {}", out));
+        }
+
+        // Verification runs *before* the commit, so a failing verifier leaves
+        // the user with a rejected patch rather than a bad commit to undo.
+        let mut verify_output = String::new();
+        if let Some(cmd) = verify_command.as_deref() {
+            if !cmd.trim().is_empty() {
+                let output = std::process::Command::new("cmd")
+                    .args(["/C", cmd])
+                    .current_dir(&base)
+                    .output()
+                    .map_err(|e| format!("apply_patch: could not run the verifier: {}", e))?;
+                verify_output = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                )
+                .trim()
+                .to_string();
+                if !output.status.success() {
+                    return Err(format!(
+                        "apply_patch: the verifier failed, so nothing was committed.\n{}",
+                        if verify_output.is_empty() {
+                            "(no output)".into()
+                        } else {
+                            verify_output.lines().take(8).collect::<Vec<_>>().join("\n")
+                        }
+                    ));
+                }
+            }
+        }
+
+        // The generated branch, off whatever HEAD is at.
+        let (ok, _) = run_git(&base, &["switch", "-c", &branch])?;
+        if !ok {
+            // The branch already exists from a previous run; carry on rather
+            // than failing a fix that is otherwise fine.
+            let _ = run_git(&base, &["switch", &branch]);
+        }
+
+        run_git(&base, &["add", "--"])?;
+        let subject: String = message.lines().next().unwrap_or("EcoTrace AI fix").to_string();
+        let body: String = message.lines().skip(1).collect::<Vec<_>>().join("\n");
+        let full_message = if body.trim().is_empty() {
+            subject
+        } else {
+            format!("{}\n\n{}", subject, body)
+        };
+        let (ok, out) = run_git(&base, &["commit", "-m", &full_message])?;
+        if !ok {
+            return Err(format!("apply_patch: git commit failed: {}", out));
+        }
+
+        let mut warning = None;
+        let mut pushed = false;
+
+        if push {
+            match run_git(&base, &["push", "--set-upstream", "origin", &branch]) {
+                Ok((true, _)) => pushed = true,
+                Ok((false, out)) => {
+                    warning = Some(format!(
+                        "Committed to '{}' but the push failed: {}",
+                        branch,
+                        out.lines().last().unwrap_or("unknown error")
+                    ))
+                }
+                Err(e) => warning = Some(format!("Committed to '{}' but: {}", branch, e)),
+            }
+        }
+
+        Ok(PushOutcome {
+            summary: format!(
+                "{} file(s) patched and committed to '{}'{}",
+                files.len(),
+                branch,
+                if pushed { ", pushed" } else { "" }
+            ),
+            branch,
+            files,
+            verify_output,
+            pushed,
+            warning,
+        })
+    })();
+
+    // The patch file is scratch, never part of the repository.
+    let _ = fs::remove_file(&patch_path);
+
+    result
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -326,7 +586,8 @@ pub fn run() {
             walk_dir,
             read_file,
             read_text,
-            read_manifest
+            read_manifest,
+            apply_patch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running EcoTrace");

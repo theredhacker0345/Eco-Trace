@@ -998,3 +998,46 @@
     outline-offset: -2px;
   }
 }
+
+// ============================================================================
+// Button group
+//
+// Three export formats that are one decision, not three. The shared border and
+// the negative margins make them read as a single control: the outer edges carry
+// the radius, the inner edges collapse, and no button appears to be detached
+// from its neighbour. The primary action leads so the group's default is its
+// first member, which keeps it in the tab order where it is expected.
+// ============================================================================
+
+.cx-btn-group {
+  display: inline-flex;
+  align-items: stretch;
+
+  // Collapse the seams between neighbours. Carbon's spacing tokens are
+  // powers-of-two on a 2px base, so -1px lands exactly on a token.
+  > .cx-btn {
+    margin-left: -1px;
+  }
+
+  > .cx-btn:first-child {
+    margin-left: 0;
+  }
+
+  // Only the outer corners are rounded.
+  > .cx-btn:first-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  > .cx-btn:last-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  // The later buttons sit on top at the seam, so the shared edge reads as one
+  // line rather than two doubled pixels.
+  > .cx-btn + .cx-btn {
+    position: relative;
+    z-index: 1;
+  }
+}

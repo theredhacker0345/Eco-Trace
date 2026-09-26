@@ -145,20 +145,33 @@
         Open project
       </button>
 
-      <button id="btn-export" class="cx-btn cx-btn--primary cx-btn--sm" disabled>
-        <svg class="i"><use href="#i-download" /></svg>
-        Export report
-      </button>
+      <!-- Export, as one labelled group.
 
-      <button id="btn-export-pdf" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled
-              title="Export a printable PDF (Ctrl+Shift+E)" aria-label="Export PDF report">
-        <svg class="i"><use href="#i-print" /></svg>
-      </button>
+           These were two icon-only buttons beside a labelled primary, and the
+           pair read as one ambiguous action plus decoration. A printer glyph is
+           not self-explanatory: it looks like "print the UI", which is a
+           different thing from "export the report as a PDF". Each of the three
+           now names its own output, and they share a border so the group reads
+           as one control with three formats. -->
+      <div class="cx-btn-group" role="group" aria-label="Export report as">
+        <button id="btn-export" class="cx-btn cx-btn--primary cx-btn--sm" disabled
+                title="Write a self-contained HTML report (Ctrl+E)">
+          <svg class="i"><use href="#i-download" /></svg>
+          HTML
+        </button>
 
-      <button id="btn-export-open" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled
-              title="Open the report in your browser (Ctrl+Shift+P)" aria-label="Open report in browser">
-        <svg class="i"><use href="#i-launch" /></svg>
-      </button>
+        <button id="btn-export-pdf" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled
+                title="Open the print dialog to save the report as a PDF (Ctrl+Shift+E)">
+          <svg class="i"><use href="#i-print" /></svg>
+          PDF
+        </button>
+
+        <button id="btn-export-open" class="cx-btn cx-btn--tertiary cx-btn--sm" disabled
+                title="Write the report and open it in your browser (Ctrl+Shift+P)">
+          <svg class="i"><use href="#i-launch" /></svg>
+          Browser
+        </button>
+      </div>
 
       <button id="btn-toggle-inspector" class="cx-btn cx-btn--ghost cx-btn--icon cx-btn--sm cx-under-1280"
               title="Show inspector" aria-label="Show inspector" aria-expanded="false">
@@ -503,7 +516,7 @@
         </p>
       </div>
 
-      <div id="finding-detail" hidden>
+        <div id="finding-detail" class="cx-inspector__detail" hidden>
         <div class="cx-inspector__head">
           <div class="cx-inspector__identity">
             <div class="cx-inspector__title">
@@ -527,21 +540,25 @@
 
         <div class="cx-inspector__tabs" role="tablist" aria-label="Finding detail">
           <button class="cx-tab cx-inspector__tab" role="tab" id="tab-overview"
-                  aria-controls="panel-overview" aria-selected="true" data-tab="overview">
+                  aria-controls="tabpanel-overview" aria-selected="true" data-tab="overview">
             Overview
           </button>
           <button class="cx-tab cx-inspector__tab" role="tab" id="tab-chain"
-                  aria-controls="panel-chain" aria-selected="false" data-tab="chain" tabindex="-1">
+                  aria-controls="tabpanel-chain" aria-selected="false" data-tab="chain" tabindex="-1">
             Causal chain <span class="cx-tab__count" id="chain-count"></span>
           </button>
           <button class="cx-tab cx-inspector__tab" role="tab" id="tab-fix"
-                  aria-controls="panel-fix" aria-selected="false" data-tab="fix" tabindex="-1">
+                  aria-controls="tabpanel-fix" aria-selected="false" data-tab="fix" tabindex="-1">
             Fix
+          </button>
+          <button class="cx-tab cx-inspector__tab" role="tab" id="tab-aifix"
+                  aria-controls="tabpanel-aifix" aria-selected="false" data-tab="aifix" tabindex="-1">
+            AI fix
           </button>
         </div>
 
         <div class="cx-inspector__body">
-          <div class="cx-inspector__panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+          <div class="cx-inspector__panel" id="tabpanel-overview" role="tabpanel" aria-labelledby="tab-overview">
             <div class="cx-section">
               <h3 class="cx-section__title">
                 <svg class="i"><use href="#i-info" /></svg>
@@ -577,7 +594,7 @@
             </div>
           </div>
 
-          <div class="cx-inspector__panel" id="panel-chain" role="tabpanel" aria-labelledby="tab-chain" hidden>
+          <div class="cx-inspector__panel" id="tabpanel-chain" role="tabpanel" aria-labelledby="tab-chain" hidden>
             <div class="cx-section">
               <h3 class="cx-section__title">
                 <svg class="i"><use href="#i-flow" /></svg>
@@ -602,7 +619,7 @@
             </div>
           </div>
 
-          <div class="cx-inspector__panel" id="panel-fix" role="tabpanel" aria-labelledby="tab-fix" hidden>
+          <div class="cx-inspector__panel" id="tabpanel-fix" role="tabpanel" aria-labelledby="tab-fix" hidden>
             <div class="cx-fix">
               <div class="cx-fix__bar">
                 <span class="cx-fix__origin" id="fix-origin">
@@ -624,6 +641,61 @@
                   <svg class="i"><use href="#i-launch" /></svg>
                   Copy as patch note
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI fix — Bob proposes a patch, the detectors verify it, a human merges it -->
+          <div class="cx-inspector__panel" id="tabpanel-aifix" role="tabpanel" aria-labelledby="tab-aifix" hidden>
+            <div class="cx-aifix" id="aifix-root">
+              <div class="cx-aifix__intro">
+                <p class="cx-prose">
+                  Bob reads the <code>FIX_SKILL_MD</code> playbook, repairs
+                  <strong id="aifix-target">this finding</strong>, and the detectors
+                  re-run over the result. The cost is reported before anything is
+                  written.
+                </p>
+                <button id="btn-aifix-run" class="cx-btn cx-btn--primary cx-btn--sm">
+                  <svg class="i"><use href="#i-bulb" /></svg>
+                  Propose an AI fix
+                </button>
+                <p class="cx-aifix__note" id="aifix-hint"></p>
+              </div>
+
+              <div class="cx-aifix__result" id="aifix-result" hidden>
+                <div class="cx-aifix__verdict" id="aifix-verdict"></div>
+
+                <dl class="cx-kv" id="aifix-facts"></dl>
+
+                <div class="cx-section" id="aifix-notes-section" hidden>
+                  <h3 class="cx-section__title">
+                    <svg class="i"><use href="#i-info" /></svg>
+                    Bob's reasoning
+                  </h3>
+                  <p class="cx-prose" id="aifix-notes"></p>
+                </div>
+
+                <div class="cx-section" id="aifix-diff-section" hidden>
+                  <h3 class="cx-section__title">
+                    <svg class="i"><use href="#i-code" /></svg>
+                    Proposed patch
+                  </h3>
+                  <pre class="cx-code cx-code--diff" id="aifix-diff" tabindex="0"
+                       aria-label="Proposed patch"></pre>
+                </div>
+
+                <div class="cx-fix__actions" id="aifix-actions" hidden>
+                  <button id="btn-aifix-apply" class="cx-btn cx-btn--primary cx-btn--sm">
+                    <svg class="i"><use href="#i-download" /></svg>
+                    Apply to a branch
+                  </button>
+                  <button id="btn-aifix-copy" class="cx-btn cx-btn--tertiary cx-btn--sm">
+                    <svg class="i"><use href="#i-copy" /></svg>
+                    Copy patch
+                  </button>
+                </div>
+
+                <p class="cx-aifix__note" id="aifix-apply-note"></p>
               </div>
             </div>
           </div>

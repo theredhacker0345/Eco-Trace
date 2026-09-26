@@ -75,25 +75,25 @@ function renderVitals(): void {
   qs("vitals-medium").textContent = String(tally.medium);
   qs("vitals-files").textContent = String(state.files.length);
 
+  // The titles only get overwritten while the actions are unavailable. When
+  // they are enabled, the markup's own tooltips stay, because those name the
+  // output format and carry the keyboard shortcut, which is more use than a
+  // restatement of the button's label.
   const exportBtn = qs<HTMLButtonElement>("btn-export");
   const noScan = state.findings.length === 0;
   exportBtn.disabled = noScan;
-  exportBtn.title = noScan
-    ? "Run an analysis first"
-    : "Write a self-contained HTML report";
+  if (noScan) exportBtn.title = "Run an analysis first";
 
   // The PDF and browser actions are gated on exactly the same condition, so
   // they are enabled together. Leaving one of the three live while the others
   // are dead reads as a broken button rather than as a deliberate gate.
   const pdfBtn = qs<HTMLButtonElement>("btn-export-pdf");
   pdfBtn.disabled = noScan;
-  pdfBtn.title = noScan ? "Run an analysis first" : "Print to a PDF (Ctrl+Shift+E)";
+  if (noScan) pdfBtn.title = "Run an analysis first";
 
   const openBtn = qs<HTMLButtonElement>("btn-export-open");
   openBtn.disabled = noScan;
-  openBtn.title = noScan
-    ? "Run an analysis first"
-    : "Open the report in your browser (Ctrl+Shift+P)";
+  if (noScan) openBtn.title = "Run an analysis first";
 }
 
 function setStatus(text: string, muted = true): void {

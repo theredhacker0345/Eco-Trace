@@ -258,9 +258,22 @@
 .cx-shell__body {
   display: grid;
   grid-template-columns: var(--pane-nav, 300px) 1px minmax(0, 1fr) 1px var(
-      --pane-inspector,
-      420px
-    );
+    --pane-inspector,
+    420px
+  );
+
+  // Bounding the row is what makes the panes scroll.
+  //
+  // Without an explicit row, the implicit row is auto-sized to the tallest
+  // item, so a long finding -- a seven-hop causal chain, say -- grew the row,
+  // grew the pane, and grew the inspector body past the space it was given.
+  // `overflow-y: auto` on the body then had nothing to trigger against, and
+  // the `overflow: hidden` here clipped the remainder. The symptom was a
+  // causal chain you could not scroll: the content existed, off the bottom of
+  // the window, with no scrollbar to reach it. No amount of fixing the inner
+  // panel helps, because the inner panel was never given a smaller box.
+  grid-template-rows: minmax(0, 1fr);
+
   min-height: 0;
   overflow: hidden;
   background: var(--cx-surface-app);

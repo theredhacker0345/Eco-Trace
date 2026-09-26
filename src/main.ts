@@ -28,7 +28,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Command } from "@tauri-apps/plugin-shell";
-import { tempDir } from "@tauri-apps/api/path";
 import { join } from "@tauri-apps/api/path";
 
 // The stylesheet is compiled from Sass and imported here rather than linked
@@ -46,8 +45,21 @@ import {
   type GradeResult,
   type ScanRecord,
 } from "./grader/grade.js";
-import { loadSettings, saveSettings, type AppSettings } from "./settings.js";
+import {
+  ensureReportsDir,
+  loadSettings,
+  saveSettings,
+  type AppSettings,
+} from "./settings.js";
 
+import {
+  BobClient,
+  BobError,
+  estimateCostUsd,
+  extractJson,
+  formatCost,
+} from "./bob/client.js";
+import { initAiFix } from "./ui/aifixpanel.js";
 import { buildReportPayload } from "./report/payload.js";
 import { printToPdf, renderReport, revealReport, writeReport } from "./report/export.js";
 import { isHostedBuild, isDesktopShell, unavailableReason } from "./ui/shell.js";
@@ -103,8 +115,6 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const BOB_API_BASE = "https://api.bob.ibm.com/v2";
-
 /**
  * Version stamped into the exported report.
  *
@@ -158,6 +168,7 @@ async function boot(): Promise<void> {
   initNavigator();
   initFindingsTable();
   initInspector();
+  initAiFix();
   initPalette();
   initModals();
 
@@ -729,40 +740,33 @@ async function requestBobAnalysis(): Promise<BobFinding[] | null> {
     { role: "user", content: prompt },
   ];
 
-  const response = await fetch(`${BOB_API_BASE}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: state.settings.bobModel,
-      messages,
-      temperature: 0.1,
-      max_tokens: 4096,
-    }),
+  // Through the hardened client: a timeout, retries on transient failures, and
+  // token accounting. The previous bare fetch could hang indefinitely, and a
+  // single 429 discarded an entire enrichment pass.
+  const result = await new BobClient().complete(key, {
+    model: state.settings.bobModel,
+    messages,
+    temperature: 0.1,
+    maxTokens: 4096,
   });
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`HTTP ${response.status}: ${detail.slice(0, 200)}`);
-  }
+  const cost = estimateCostUsd(state.settings.bobModel, result.usage);
+  log(
+    "success",
+    `Bob responded in ${(result.usage.wallClockMs / 1000).toFixed(1)}s — ` +
+      `${result.usage.totalTokens.toLocaleString()} tokens` +
+      (cost !== null ? `, ${formatCost(cost)}` : ", cost not reported") +
+      (result.retried ? `, after ${result.attempts} attempts` : "")
+  );
 
-  const data = (await response.json()) as {
-    choices: Array<{ message: { content: string } }>;
-  };
-  const content = data.choices?.[0]?.message?.content ?? "";
-  const cleaned = content
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```$/, "")
-    .trim();
-
-  try {
-    const parsed = JSON.parse(cleaned) as unknown;
-    return Array.isArray(parsed) ? (parsed as BobFinding[]) : null;
-  } catch {
-    throw new Error("Bob returned malformed JSON.");
+  // Tolerant extraction: a fenced block, a prose preamble, or an array truncated
+  // at the token limit all yield usable answers, and the strict parse was
+  // discarding them over formatting.
+  const parsed = extractJson<BobFinding[]>(result.text);
+  if (!Array.isArray(parsed)) {
+    throw new Error("Bob's response did not contain a findings array.");
   }
+  return parsed;
 }
 
 /**
@@ -1069,22 +1073,40 @@ function wireSettings(): void {
     status.innerHTML = `<span class="cx-conn__dot"></span><span>Testing…</span>`;
 
     try {
-      const response = await fetch(`${BOB_API_BASE}/models`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-      if (response.ok) {
+      // Routed through the hardened client rather than a bare fetch, so a hung
+      // socket cannot leave this button spinning forever and a 401 is reported
+      // as a bad key rather than as a network failure — the two are
+      // indistinguishable from a plain `fetch` and mean opposite things to the
+      // person holding the key.
+      const models = await new BobClient().listModels(key);
+      if (models.length > 0) {
         status.innerHTML = `<span class="cx-conn__dot"></span><span>Key accepted</span>`;
         status.classList.add("cx-conn--on");
-        notify("success", "Key accepted", "IBM Bob 2.0 responded to the request.");
+        notify(
+          "success",
+          "Key accepted",
+          `IBM Bob 2.0 responded. ${models.length} model(s) available: ${models
+            .slice(0, 3)
+            .join(", ")}`
+        );
       } else {
-        status.innerHTML = `<span class="cx-conn__dot"></span><span>Rejected (HTTP ${response.status})</span>`;
+        status.innerHTML = `<span class="cx-conn__dot"></span><span>Reachable, no models</span>`;
         status.classList.remove("cx-conn--on");
-        notify("error", "Key rejected", `The endpoint answered HTTP ${response.status}.`);
+        notify(
+          "warning",
+          "Reachable but empty",
+          "The endpoint answered, but listed no models. Check the key's entitlements."
+        );
       }
-    } catch {
-      status.innerHTML = `<span class="cx-conn__dot"></span><span>Network error</span>`;
+    } catch (err) {
+      const message = err instanceof BobError ? err.message : String(err);
+      const hint = err instanceof BobError ? err.hint : "";
+      status.innerHTML = `<span class="cx-conn__dot"></span><span>${esc(
+        message.length > 40 ? "Connection failed" : message
+      )}</span>`;
       status.classList.remove("cx-conn--on");
-      notify("error", "Network error", "The Bob endpoint could not be reached.");
+      log("high", `Bob connection test failed: ${message}${hint ? ` — ${hint}` : ""}`);
+      notify("error", message, hint || "The Bob endpoint could not be reached.");
     } finally {
       button.disabled = false;
     }
@@ -1276,9 +1298,9 @@ function reportReady(): boolean {
   return false;
 }
 
-/** A path in the OS temp directory, for a report the user is not choosing. */
+/** A path in the app's report directory, created on demand. */
 async function scratchPath(name: string): Promise<string> {
-  return join(await tempDir(), name);
+  return join(await ensureReportsDir(), name);
 }
 
 // ---------------------------------------------------------------------------

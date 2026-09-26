@@ -13,7 +13,8 @@
 import type { ChainNode, Finding } from "../analyzer/static.js";
 import { esc, qs, qsa, renderCode } from "./dom.js";
 import { locationLabel, relPath } from "./format.js";
-import { initTablist } from "./focus.js";
+import { initTablist } from './focus.js';
+import { resetAiFix } from './aifixpanel.js';
 import { fixFor, hasTemplate } from "./remediation.js";
 import { selectedFinding, state, subscribe } from "./store.js";
 
@@ -128,10 +129,20 @@ function chainMarkup(finding: Finding): string {
     .join("");
 }
 
+let lastRenderedIdentity: string | null = null;
+
 function render(): void {
   const finding = selectedFinding();
   const empty = qs("fix-empty");
   const detail = qs("finding-detail");
+
+  // A proposed patch belongs to the finding it was proposed for. Without this,
+  // stepping to the next finding leaves a verified patch and its cost sitting
+  // under a completely different rule, and the Apply button would write it.
+  if (finding?.patternId !== lastRenderedIdentity) {
+    lastRenderedIdentity = finding ? `${finding.patternId}|${finding.file}|${finding.line}` : null;
+    resetAiFix();
+  }
 
   if (!finding) {
     empty.hidden = false;
@@ -213,8 +224,16 @@ export function initInspector(): void {
   const tabs = document.querySelector<HTMLElement>(".cx-inspector__tabs");
   if (tabs) {
     initTablist(tabs, (id) => {
+      // The panels are `tabpanel-<id>`, and the tabs point at them through
+      // `aria-controls`. Reading the mapping off that attribute rather than
+      // reconstructing the id is what keeps the two in step: this callback used
+      // to build `panel-${id}` and quietly stopped matching the moment the
+      // panels were renamed, which left every tab showing nothing.
+      const target = tabs
+        .querySelector<HTMLElement>('[data-tab="' + id + '"]')
+        ?.getAttribute("aria-controls");
       for (const panel of qsa<HTMLElement>(".cx-inspector__panel")) {
-        panel.hidden = panel.id !== `panel-${id}`;
+        panel.hidden = target ? panel.id !== target : true;
       }
     });
   }

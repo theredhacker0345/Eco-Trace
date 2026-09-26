@@ -91,10 +91,46 @@
   min-width: 0;
 }
 
-.cx-inspector__body {
+/*
+ * The selected-finding wrapper.
+ *
+ * This element existed as a bare `<div>` with no rule of its own, which put a
+ * plain block box between the flex column (`.cx-pane--inspector`) and the
+ * scroll container (`.cx-inspector__body`). The body's `flex: 1` and
+ * `min-height: 0` are meaningless inside a block parent, so it grew to fit its
+ * content instead of scrolling; the pane above it has `overflow: hidden`, so the
+ * overflow was simply clipped.
+ *
+ * The visible symptom was a causal chain you could not scroll: the hops below
+ * the fold existed, with no scrollbar to reach them. It only appeared once a
+ * finding was selected, because until then this element is `hidden` and the
+ * Overview panel is the one on screen.
+ *
+ * As a flex column it is a pass-through: it takes the space the pane gives it
+ * and hands a bounded box to the body, which is what makes `overflow-y: auto`
+ * mean something.
+ */
+.cx-inspector__detail {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.cx-inspector__detail[hidden] {
+  display: none;
+}
+
+.cx-inspector__body {
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
+
+  /* Keyboard paging needs a focusable scroll container, and a long chain is
+     exactly the case where a keyboard user would otherwise be stuck: the tab
+     order walks the chain links, but the viewport never moves. */
+  scrollbar-gutter: stable;
 }
 
 .cx-inspector__panel {
@@ -382,4 +418,100 @@
   flex: none;
   margin-top: 2px;
   fill: var(--cds-text-placeholder);
+}
+
+// ============================================================================
+// AI fix
+//
+// Laid out as a decision, not a console: what it will do, what it cost, whether
+// it was verified, and only then the two buttons that change anything. The cost
+// and the verdict sit above the patch deliberately, because a reader who has
+// already scrolled into a diff has stopped asking whether they want it.
+// ============================================================================
+
+.cx-aifix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-lg);
+}
+
+.cx-aifix__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-md);
+  align-items: flex-start;
+}
+
+.cx-aifix__intro .cx-btn {
+  align-self: flex-start;
+}
+
+.cx-aifix__note {
+  font-size: var(--cx-text-label-01, 11px);
+  line-height: var(--cx-line-height-label-01, 16px);
+  color: var(--cx-text-secondary, #8d8d8d);
+  margin: 0;
+}
+
+.cx-aifix__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cx-space-md);
+}
+
+.cx-aifix__verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cx-space-3, 8px);
+  padding: var(--cx-space-4, 12px) var(--cx-space-4, 12px);
+  font-size: var(--cx-text-body-short-01, 14px);
+  line-height: var(--cx-line-height-body-short-01, 20px);
+  border-left: 3px solid var(--cx-support-warning, #8e6a00);
+  background: var(--cx-layer-01, #f4f4f4);
+}
+
+.cx-aifix__verdict[data-tone='ok'] {
+  border-left-color: var(--cx-support-success, #198038);
+}
+
+.cx-aifix__verdict[data-tone='bad'] {
+  border-left-color: var(--cx-support-error, #da1e28);
+}
+
+.cx-aifix__cost {
+  font-family: var(--cx-font-mono, monospace);
+  font-weight: 600;
+  color: var(--cx-text-primary, #161616);
+}
+
+.cx-kv {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--cx-space-2, 4px) var(--cx-space-4, 12px);
+  font-size: var(--cx-text-label-01, 11px);
+  line-height: var(--cx-line-height-label-01, 16px);
+  margin: 0;
+}
+
+.cx-kv dt {
+  color: var(--cx-text-secondary, #8d8d8d);
+}
+
+.cx-kv dd {
+  margin: 0;
+  font-family: var(--cx-font-mono, monospace);
+  color: var(--cx-text-primary, #161616);
+  overflow-wrap: anywhere;
+}
+
+.cx-code--diff {
+  border-left-color: var(--cx-support-info, #0f62fe);
+  color: var(--cx-text-primary, #161616);
+}
+
+// A rejected patch is never applied, so the actions are withheld rather than
+// disabled-and-clickable.
+.cx-fix__actions {
+  flex-wrap: wrap;
+  gap: var(--cx-space-2, 4px);
 }
