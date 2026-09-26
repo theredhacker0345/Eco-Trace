@@ -1,4 +1,4 @@
-// EcoTrace — Settings persistence (Sub-Task 4b)
+// EcoTrace — Settings persistence
 // Reads/writes %APPDATA%\ecotrace\settings.json via the Tauri FS plugin.
 
 import { readTextFile, writeTextFile, mkdir, exists } from "@tauri-apps/plugin-fs";
@@ -7,8 +7,10 @@ import { appDataDir, join } from "@tauri-apps/api/path";
 export interface AppSettings {
   /** Full path to the adb executable, or just "adb" if it is on PATH. */
   adbPath: string;
-  /** API key — stored only, not used in this build. */
+  /** IBM Bob 2.0 API key — stored locally, used for all analysis calls. */
   apiKey: string;
+  /** Bob model to use for analysis. */
+  bobModel: "bob-2" | "bob-2-mini";
 }
 
 // ---------------------------------------------------------------------------
@@ -16,7 +18,7 @@ export interface AppSettings {
 // ---------------------------------------------------------------------------
 
 export function getDefaultSettings(): AppSettings {
-  return { adbPath: "adb", apiKey: "" };
+  return { adbPath: "adb", apiKey: "", bobModel: "bob-2" };
 }
 
 // ---------------------------------------------------------------------------
@@ -49,12 +51,11 @@ export async function loadSettings(): Promise<AppSettings> {
   }
 }
 
-export async function saveSettings(settings: AppSettings): Promise<void> {
+export async function saveSettings(s: AppSettings): Promise<void> {
   const dir = await settingsDirPath();
-  const dirExists = await exists(dir);
-  if (!dirExists) {
+  if (!(await exists(dir))) {
     await mkdir(dir, { recursive: true });
   }
   const filePath = await settingsFilePath();
-  await writeTextFile(filePath, JSON.stringify(settings, null, 2));
+  await writeTextFile(filePath, JSON.stringify(s, null, 2));
 }
