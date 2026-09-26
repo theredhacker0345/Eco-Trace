@@ -968,3 +968,33 @@
   --cx-medium: #8e6a00;
   --cx-success: #198038;
 }
+
+// ============================================================================
+// Desktop-only controls
+//
+// Controls that need the Tauri shell -- the folder picker, settings persistence
+// -- are marked in a hosted build. They are dimmed and carry the reason in their
+// tooltip, but they stay clickable on purpose: a dead button teaches the reader
+// nothing, whereas clicking one produces a sentence explaining why it cannot work
+// here and what to use instead.
+//
+// `aria-disabled` rather than `disabled`, because a truly disabled control is
+// removed from the tab order and a screen-reader user would never discover that
+// the capability exists at all.
+// ============================================================================
+
+[data-desktop-only] {
+  opacity: 0.55;
+  cursor: not-allowed;
+
+  &:hover {
+    // Suppress the hover affordance so the control does not look live.
+    background: inherit;
+  }
+
+  &:focus-visible {
+    // Still focusable: keyboard users must be able to reach it and hear why.
+    outline: 2px solid var(--cx-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+}

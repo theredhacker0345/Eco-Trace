@@ -50,6 +50,7 @@ import { loadSettings, saveSettings, type AppSettings } from "./settings.js";
 
 import { buildReportPayload } from "./report/payload.js";
 import { printToPdf, renderReport, revealReport, writeReport } from "./report/export.js";
+import { isHostedBuild, isDesktopShell, unavailableReason } from "./ui/shell.js";
 
 import { esc, qs, qsButton, qsInput, qsa } from "./ui/dom.js";
 import { installKeymap, type Shortcut } from "./ui/focus.js";
@@ -242,6 +243,32 @@ function wireHeader(): void {
   qs("btn-analyze").addEventListener("click", () => void runAnalysis());
   qs("btn-history").addEventListener("click", () => openHistory(history));
   qs("bob-status").addEventListener("click", openSettings);
+  markDesktopOnlyControls();
+}
+
+/**
+ * Marks the controls that cannot work in a hosted build.
+ *
+ * A button that is visible, looks enabled, and is guaranteed to fail is worse
+ * than one that says up front why it is unavailable. Each of these is disabled
+ * with the reason in its tooltip, so the demo is honest about its own limits
+ * instead of hiding them until someone clicks.
+ */
+function markDesktopOnlyControls(): void {
+  if (isDesktopShell()) return;
+
+  const mark = (id: string, reason: string): void => {
+    const el = qs<HTMLElement>(id);
+    el.setAttribute("aria-disabled", "true");
+    el.dataset.desktopOnly = "true";
+    el.title = reason;
+  };
+
+  mark("btn-open-project", unavailableReason("Opening a project folder"));
+  mark("btn-landing-open", unavailableReason("Opening a project folder"));
+  mark("btn-landing-settings", unavailableReason("Persisting settings"));
+  mark("btn-settings", unavailableReason("Persisting settings"));
+  mark("bob-status", unavailableReason("Persisting an API key"));
 }
 
 // ---------------------------------------------------------------------------
@@ -346,6 +373,17 @@ function wireToolbar(): void {
 // ---------------------------------------------------------------------------
 
 async function openProject(): Promise<void> {
+  // Guarded before the plugin is touched. `openDialog` resolves through the
+  // Tauri IPC bridge, and outside the desktop shell that bridge is undefined,
+  // so calling it produced a raw
+  // `TypeError: Cannot read properties of undefined (reading 'invoke')` in a
+  // toast on a button that could never have worked in a browser.
+  if (isHostedBuild()) {
+    log("system", unavailableReason("Opening a project folder"));
+    notify("info", "Desktop app required", unavailableReason("Opening a project folder"));
+    return;
+  }
+
   let selected: unknown;
   try {
     selected = await openDialog({
@@ -354,6 +392,7 @@ async function openProject(): Promise<void> {
       title: "Open Android project",
     });
   } catch (err) {
+    log("system", `Folder picker failed: ${String(err)}`);
     notify("error", "Could not open the folder picker", String(err));
     return;
   }
@@ -1061,6 +1100,26 @@ function wireSettings(): void {
       bobModel: (model.value as AppSettings["bobModel"]) || "bob-2",
     };
     state.settings = next;
+
+    // Persisting resolves through the Tauri filesystem plugin, which does not
+    // exist in a hosted build. The settings are still applied in memory for
+    // this session — there is just nowhere to write them — and the note says so
+    // rather than the save appearing to succeed and then vanishing on reload.
+    if (isHostedBuild()) {
+      syncConnectionIndicator();
+      closeSettings();
+      emit("settings");
+      note.textContent =
+        "Applied for this session only. The hosted build has no filesystem, so this cannot be saved.";
+      log("system", unavailableReason("Saving settings"));
+      notify(
+        "info",
+        "Not saved",
+        "Applied for this browser session. Use the desktop app to persist settings."
+      );
+      return;
+    }
+
     await saveSettings(next);
     syncConnectionIndicator();
     closeSettings();

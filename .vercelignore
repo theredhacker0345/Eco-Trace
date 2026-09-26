@@ -1,0 +1,17 @@
+# The hosted build is the frontend only.
+#
+# Sending the Rust toolchain and the desktop targets to Vercel would install a
+# full Tauri + Node build toolchain on every deploy for files no part of the
+# hosted bundle reads. `src-tauri/target/` alone is gigabytes.
+
+src-tauri
+bob_sessions
+docs
+.github
+dist
+node_modules
+.git
+.gitignore
+SETUP.md
+*.md
+!README.md

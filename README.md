@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src-tauri/icons/app-icon.png" width="120" alt="EcoTrace Logo" />
+<img src="assets/logo.png" width="120" height="120" alt="EcoTrace Logo" />
 
 # EcoTrace
 
@@ -514,18 +514,44 @@ it looked is a tool you cannot calibrate against.
 The build output is portable — `vite.config.ts` sets `base: "./"`, so one
 `dist/` deploys to a domain root, a subpath, or straight off disk.
 
-**GitHub Pages (configured, no account needed beyond this repo).**
+**Vercel (one command).** `vercel.json` and `.vercelignore` are committed, so:
+
+```bash
+npx vercel login     # once
+npx vercel --prod    # builds, deploys, prints the URL
+```
+
+Or import the repo at [vercel.com/new](https://vercel.com/new) and accept the
+Vite preset — no configuration required. The relative base works as-is, and the
+frontend is the only thing deployed.
+
+**GitHub Pages (configured, no extra account).**
 `.github/workflows/deploy-demo.yml` runs on every push to `main`, typechecks,
 builds, asserts the bundle actually contains the demo, and publishes. To turn it
 on: **Settings → Pages → Source: GitHub Actions**. The URL appears in the
-workflow summary after the first run.
-
-**Vercel (if you prefer it — lablab names it first).** Import the repo, accept
-the Vite preset, deploy. No configuration required; the relative base works as-is.
+workflow summary after the first run. The `deploy` job fails with
+*"Ensure GitHub Pages has been enabled"* until you do — the `build` job passes
+either way, which is how you tell the two apart.
 
 **Locally.** `npm run build && npx serve dist` — the demo mounts in any static
 server, because the check for a Tauri bridge is a runtime one rather than a
 build-time one.
+
+### What the hosted build deliberately does not do
+
+Outside the Tauri shell there is no filesystem, no folder picker and no ADB. The
+controls that need them are dimmed and carry the reason in their tooltip, and
+clicking one explains what to use instead:
+
+| Control | In a hosted build |
+|---|---|
+| **Open project** | Disabled. There is no filesystem to open a path from. The demo corpus is already loaded. |
+| **Settings** | Opens, but saving applies to the session only — nowhere to persist to. |
+| **Device profile** | Disabled. Profiling needs a phone. |
+| **Export report / PDF** | **Fully working.** Downloads a self-contained HTML file, or prints to PDF. |
+
+Nothing is hidden that a judge could find broken. A capability that is absent
+says so, in a sentence, at the point of use.
 
 ---
 

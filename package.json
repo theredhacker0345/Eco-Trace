@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "report:fonts": "node tools/embed-report-fonts.mjs",
     "deck": "node docs/deck/render.mjs",
+    "icons": "node tools/render-icons.mjs && tauri icon src-tauri/icons/icon-source.png",
     "tauri": "tauri"
   },
   "devDependencies": {

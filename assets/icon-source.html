@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" />
+<style>
+  /* Icon source, rendered to PNG then fanned out to every platform size.
+
+     The mark is the same path the app uses in its header, the report masthead
+     and the pitch deck, so the executable, the favicon and the printed document
+     are the same shape. The previous asset was an off-brand stock illustration
+     (a leaf next to code brackets) that appeared nowhere in the product. */
+  html, body { margin: 0; padding: 0; background: transparent; }
+  .icon { width: 1024px; height: 1024px; display: block; }
+</style>
+</head>
+<body>
+<svg class="icon" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#262626"/>
+      <stop offset="100%" stop-color="#0f0f0f"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#a6c8ff"/>
+      <stop offset="55%" stop-color="#4589ff"/>
+      <stop offset="100%" stop-color="#0f62fe"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded plate. Tauri masks corners on some platforms, so the plate is
+       inset from the canvas rather than bleeding to the edge. -->
+  <rect x="0" y="0" width="16" height="16" rx="3.2" fill="url(#bg)"/>
+
+  <!-- The bolt, scaled up and centred on the plate. -->
+  <g transform="translate(8 8) scale(0.66) translate(-8 -8)">
+    <path d="M9.4 1 2.6 8.7h4.2L5.2 15 13.4 6.4H8.7z" fill="url(#bolt)"/>
+  </g>
+</svg>
+</body>
+</html>
