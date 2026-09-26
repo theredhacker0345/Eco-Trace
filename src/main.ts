@@ -37,7 +37,7 @@ import { join } from "@tauri-apps/api/path";
 import "./styles/index.scss";
 
 import { runAnalysisInWorker } from "./analyzer/runner.js";
-import type { ChainNode, FileContent } from "./analyzer/static.js";
+import type { FileContent } from "./analyzer/static.js";
 import { parseDumpsys, computeDelta, type DumpsysResult, type DumpsysDelta } from "./parser/dumpsys.js";
 import {
   calculateGrade,
@@ -58,12 +58,14 @@ import { initRunLog, log } from "./ui/runLog.js";
 import { initNavigator, revealFile } from "./ui/navigator.js";
 import { allFixes, initFindingsTable, resetFilters, setScope } from "./ui/findingsTable.js";
 import {
-  currentFixText,
+  clearLocalChains,
   initInspector,
+  localChainMap,
   registerBobChain,
   registerBobFix,
   registerLocalChain,
   step,
+  currentFixText,
 } from "./ui/inspector.js";
 import {
   closePalette,
@@ -142,8 +144,6 @@ let history: ScanRecord[] = [];
 
 /** Bob-authored fixes, surfaced through the inspector module. */
 const bobFixes = new Map<string, string>();
-/** Local call-graph chains, cached so tab switching does not re-trace. */
-const localChains = new Map<string, ChainNode[]>();
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -427,7 +427,7 @@ async function loadProject(root: string): Promise<void> {
     state.selectedIndex = -1;
     state.selectedFile = null;
     state.manifestPackageNames = [];
-    localChains.clear();
+    clearLocalChains();
     bobFixes.clear();
     emit("files", "findings", "grade", "selection");
     return;
@@ -459,7 +459,7 @@ async function loadProject(root: string): Promise<void> {
   state.selectedIndex = -1;
   state.selectedFile = null;
   state.manifestPackageNames = [];
-  localChains.clear();
+  clearLocalChains();
   bobFixes.clear();
   setProgressValue(0);
 
@@ -514,7 +514,7 @@ async function runAnalysis(): Promise<void> {
   state.findings = [];
   state.grade = null;
   state.selectedIndex = -1;
-  localChains.clear();
+  clearLocalChains();
   bobFixes.clear();
   resetFilters();
   emit("findings", "grade", "selection");
@@ -544,10 +544,7 @@ async function runAnalysis(): Promise<void> {
     // re-walk the call graph.
     for (const finding of state.findings) {
       const chain = result.chains[findingKey(finding)];
-      if (chain) {
-        localChains.set(findingKey(finding), chain);
-        registerLocalChain(finding, chain);
-      }
+      if (chain) registerLocalChain(finding, chain);
     }
 
     emit("findings");
@@ -1160,7 +1157,7 @@ function buildReportHtml(): string {
     state,
     grade: state.grade ?? calculateGrade(state.findings, 0),
     history,
-    chains: localChains,
+    chains: localChainMap(),
     bobFixes,
     measurement: lastMeasurement,
     version: APP_VERSION,

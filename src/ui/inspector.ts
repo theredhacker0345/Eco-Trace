@@ -34,6 +34,25 @@ const bobChains = new Map<string, string[]>();
 /** Local call-graph chains, keyed by finding identity. */
 const localChains = new Map<string, ChainNode[]>();
 
+/**
+ * The single owner of traced chains.
+ *
+ * This used to be one of two maps. `main.ts` kept a parallel copy and passed
+ * that one to the report exporter, while the inspector rendered from this one —
+ * and the demo path only ever populated this one. The result was a report
+ * exported from the hosted demo whose Causal Chain section, the product's
+ * headline, was silently empty, with nothing in the UI to indicate it. Two maps
+ * keyed identically is one map too many.
+ */
+export function localChainMap(): ReadonlyMap<string, ChainNode[]> {
+  return localChains;
+}
+
+/** Drops every traced chain. Called when the project changes. */
+export function clearLocalChains(): void {
+  localChains.clear();
+}
+
 /** Rule + absolute path + line: the identity every per-finding map is keyed on. */
 function identity(finding: Finding): string {
   return `${finding.patternId}|${finding.file}|${finding.line}`;

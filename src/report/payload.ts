@@ -114,7 +114,7 @@ export interface BuildReportInput {
   grade: GradeResult;
   history: ScanRecord[];
   /** Chains keyed by `rule|file|line`, as published by the analysis worker. */
-  chains: Map<string, ChainNode[]>;
+  chains: ReadonlyMap<string, ChainNode[]>;
   /** Bob-authored fixes, keyed by the same identity. */
   bobFixes: Map<string, string>;
   measurement: DumpsysDelta | null;
