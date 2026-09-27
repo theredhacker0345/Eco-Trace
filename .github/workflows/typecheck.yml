@@ -42,3 +42,10 @@ jobs:
       # stay quiet. This is the check that a detector tightening loses.
       - name: Analyzer precision check
         run: npm run analyzer:check
+
+      # Every element id the TypeScript asks for must exist in index.html.
+      # ids are strings, so tsc cannot check them — and one stale id throws
+      # during init and takes every listener after it down with it, which is
+      # how the hosted build ended up with no working buttons.
+      - name: DOM contract check
+        run: npm run dom:check

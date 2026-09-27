@@ -35,3 +35,4 @@ desktop.ini
 .vercel/
 
 # bob_sessions/ is intentionally tracked -- contains hackathon session evidence
+*.exe

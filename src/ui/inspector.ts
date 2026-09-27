@@ -248,10 +248,12 @@ export function initInspector(): void {
   qs("btn-inspector-prev").addEventListener("click", () => step(-1));
   qs("btn-inspector-next").addEventListener("click", () => step(1));
 
-  qs("btn-copy-fix").addEventListener("click", async () => {
-    const text = currentFixText();
-    if (text) await copy(text, "Fix copied to the clipboard");
-  });
+  // One copy button, not two: a cleanup removed `#btn-copy-fix` from
+  // index.html but left its wiring here, and because `qs()` throws on a
+  // missing id that single stale reference aborted initInspector() and with
+  // it every listener registered after it — on the hosted build that read
+  // as "no button works". The ids the code asks for are checked against
+  // index.html by `npm run dom:check`, so this cannot ship again.
 
   qs("btn-copy-fix-full").addEventListener("click", async () => {
     const text = currentFixText();
