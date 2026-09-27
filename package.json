@@ -12,6 +12,7 @@
     "dom:check": "node tools/check-dom-contract.mjs",
     "report:fonts": "node tools/embed-report-fonts.mjs",
     "deck": "node docs/deck/render.mjs",
+    "video": "node docs/video/record-silent.mjs",
     "icons": "node tools/render-icons.mjs && tauri icon src-tauri/icons/icon-source.png",
     "workflow:lint": "node tools/lint-workflows.mjs",
     "screenshots": "node tools/capture-screenshots.mjs",
