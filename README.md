@@ -20,7 +20,7 @@
 <br/>
 
 [![IBM Bob 2.0 Hackathon](https://img.shields.io/badge/IBM%20Bob%202.0%20Hackathon-September%202026-0f62fe?style=flat-square&logo=ibm)](https://lablab.ai/ai-hackathons/ibm-bob-2-hackathon)
-[![Team](https://img.shields.io/badge/Team-Code%20%26%20Chaos-7c3aed?style=flat-square)](https://lablab.ai/u/@theredhacker0345)
+[![Team](https://img.shields.io/badge/Team-Code%20%26%20Chaos-7c3aed?style=flat-square)](https://lablab.ai/ai-hackathons/ibm-bob-2-hackathon/code-and-chaos)
 
 <br/>
 
