@@ -14,6 +14,11 @@ import { esc, icon, qs } from "./dom.js";
 
 export type ToastKind = "info" | "success" | "warning" | "error";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 const ICONS: Record<ToastKind, string> = {
   info: "info",
   success: "check-circle",
@@ -44,7 +49,8 @@ export function notify(
   kind: ToastKind,
   title: string,
   detail?: string,
-  duration = DEFAULT_DURATION
+  duration = DEFAULT_DURATION,
+  actions?: ToastAction[]
 ): void {
   const host = container();
 
@@ -55,11 +61,23 @@ export function notify(
 
   const toast = document.createElement("div");
   toast.className = `cx-toast cx-toast--${kind}`;
+  const actionsHtml = actions
+    ? `<div class="cx-toast__actions">${actions
+        .map(
+          (a) =>
+            `<button class="cx-btn cx-btn--ghost cx-toast__action">${esc(
+              a.label
+            )}</button>`
+        )
+        .join("")}</div>`
+    : "";
+
   toast.innerHTML = `
     <svg class="cx-toast__icon" aria-hidden="true"><use href="#i-${ICONS[kind]}" /></svg>
     <div class="cx-toast__body">
       <div class="cx-toast__title">${esc(title)}</div>
       ${detail ? `<div class="cx-toast__detail">${esc(detail)}</div>` : ""}
+      ${actionsHtml}
     </div>
     <button class="cx-toast__close" aria-label="Dismiss notification">
       ${icon("close")}
@@ -69,6 +87,15 @@ export function notify(
   toast.querySelector(".cx-toast__close")?.addEventListener("click", () => {
     dismiss(toast);
   });
+
+  if (actions) {
+    actions.forEach((action, i) => {
+      toast.querySelectorAll(".cx-toast__action")[i]?.addEventListener("click", () => {
+        action.onClick();
+        dismiss(toast);
+      });
+    });
+  }
 
   host.appendChild(toast);
 

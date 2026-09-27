@@ -39,6 +39,14 @@ export function unavailableReason(feature: string): string {
   return (
     `${feature} needs the EcoTrace desktop app. ` +
     "The hosted build is a demo over a bundled sample project — it has no access " +
-    "to your filesystem, so there is nothing to open or persist."
+    "to your filesystem, so there is nothing to open or persist. " +
+    "Download: https://github.com/theredhacker0345/Eco-Trace/releases"
   );
+}
+
+/**
+ * Opens the releases page for download.
+ */
+export function openDownloadPage(): void {
+  window.open("https://github.com/theredhacker0345/Eco-Trace/releases", "_blank");
 }

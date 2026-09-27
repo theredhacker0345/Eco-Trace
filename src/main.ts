@@ -62,7 +62,7 @@ import {
 import { initAiFix } from "./ui/aifixpanel.js";
 import { buildReportPayload } from "./report/payload.js";
 import { printToPdf, renderReport, revealReport, writeReport } from "./report/export.js";
-import { isHostedBuild, isDesktopShell, unavailableReason } from "./ui/shell.js";
+import { isHostedBuild, isDesktopShell, unavailableReason, openDownloadPage } from "./ui/shell.js";
 
 import { esc, qs, qsButton, qsInput, qsa } from "./ui/dom.js";
 import { installKeymap, type Shortcut } from "./ui/focus.js";
@@ -391,9 +391,15 @@ async function openProject(): Promise<void> {
   // so calling it produced a raw
   // `TypeError: Cannot read properties of undefined (reading 'invoke')` in a
   // toast on a button that could never have worked in a browser.
-  if (isHostedBuild()) {
+if (isHostedBuild()) {
     log("system", unavailableReason("Opening a project folder"));
-    notify("info", "Desktop app required", unavailableReason("Opening a project folder"));
+    notify(
+      "info",
+      "Desktop app required",
+      unavailableReason("Opening a project folder"),
+      8000,
+      [{ label: "Download", onClick: openDownloadPage }]
+    );
     return;
   }
 
@@ -875,6 +881,17 @@ function wireDeviceProfile(): void {
 }
 
 async function startProfile(): Promise<void> {
+  if (isHostedBuild()) {
+    log("system", unavailableReason("Device profiling"));
+    notify(
+      "info",
+      "Desktop app required",
+      unavailableReason("Device profiling"),
+      8000,
+      [{ label: "Download", onClick: openDownloadPage }]
+    );
+    return;
+  }
   state.device = "arming";
   emit("device");
   log("info", "Requesting an ADB baseline snapshot…");
@@ -1135,7 +1152,7 @@ function wireSettings(): void {
     // exist in a hosted build. The settings are still applied in memory for
     // this session — there is just nowhere to write them — and the note says so
     // rather than the save appearing to succeed and then vanishing on reload.
-    if (isHostedBuild()) {
+if (isHostedBuild()) {
       syncConnectionIndicator();
       note.textContent =
         "Applied for this session only. The hosted build has no filesystem, so this cannot be saved.";
@@ -1145,7 +1162,9 @@ function wireSettings(): void {
       notify(
         "info",
         "Not saved",
-        "Applied for this browser session. Use the desktop app to persist settings."
+        unavailableReason("Saving settings"),
+        8000,
+        [{ label: "Download", onClick: openDownloadPage }]
       );
       return;
     }
